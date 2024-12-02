@@ -1,14 +1,19 @@
+#poet.py
 import numpy as np
+from model import CarAgent
 
 class POET:
-    def __init__(self, E_init, theta_init, alpha, noise_std, T, N_mutate, N_transfer):
+    def __init__(self, E_init, alpha, noise_std, T, N_mutate, N_transfer, env_input_dim, hidden_dim, action_dim):
         self.E_init = E_init
-        self.theta_init = theta_init
         self.alpha = alpha
         self.noise_std = noise_std
         self.T = T
         self.N_mutate = N_mutate
         self.N_transfer = N_transfer
+        
+        self.env_input_dim = env_input_dim
+        self.hidden_dim = hidden_dim
+        self.action_dim = action_dim
 
         #number of samples
         self.n = 20
@@ -26,6 +31,16 @@ class POET:
         #environment for novelty
         self.envs = []
         self.archive_envs = []
+    
+    def create_new_agent(self):
+        return CarAgent(self.env_input_dim, self.hidden_dim, self.action_dim)
+
+    def transfer_weights(self, source_agent, target_agent):
+        target_agent.policy_network.load_state_dict(source_agent.policy_network.state_dict())
+        target_agent.value_network.load_state_dict(source_agent.value_network.state_dict())
+
+    def evaluate_policy(self, agent, env):
+        return env.evaluate_agent(agent)   
 
     def eligible_to_reproduce(self, E_m, theta_m):
         return E_m(theta_m) >= self.threshold_el
