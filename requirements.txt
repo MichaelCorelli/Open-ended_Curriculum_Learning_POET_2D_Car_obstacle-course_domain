@@ -1,0 +1,3 @@
+numpy
+scipy
+gymnasium==0.29.1
