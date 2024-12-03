@@ -1,4 +1,3 @@
-#main.py
 import pygame
 import random
 import numpy as np
@@ -27,7 +26,7 @@ class CarEnvironment(gym.Env):
         #Initialize Pygame and Box2D world
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
-        pygame.display.set_caption("POET Car Simulation")
+        pygame.display.set_caption("POET 2D Car Simulation")
         self.clock = pygame.time.Clock()
         self.world = world(gravity=(0, -10), doSleep=True)
         self.bodies = []

@@ -1,4 +1,3 @@
-#poet.py
 import numpy as np
 from model import CarAgent
 
