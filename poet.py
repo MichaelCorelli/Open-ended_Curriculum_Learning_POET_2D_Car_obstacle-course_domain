@@ -2,8 +2,9 @@ import numpy as np
 from model import CarAgent
 
 class POET:
-    def __init__(self, E_init, alpha, noise_std, T, N_mutate, N_transfer, env_input_dim, hidden_dim, action_dim):
+    def __init__(self, E_init, theta_init, alpha, noise_std, T, N_mutate, N_transfer, env_input_dim, hidden_dim, action_dim):
         self.E_init = E_init
+        self.theta_init = theta_init
         self.alpha = alpha
         self.noise_std = noise_std
         self.T = T
