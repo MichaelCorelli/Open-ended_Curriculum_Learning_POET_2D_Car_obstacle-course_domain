@@ -3,8 +3,8 @@ import random
 import numpy as np
 from Box2D.b2 import world, polygonShape, circleShape, revoluteJointDef
 from Box2D.b2 import RayCastCallback as b2RayCastCallback
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 from model import CarAgent
 from poet import POET
 
@@ -262,7 +262,7 @@ class Car:
             lidar_data.append(distance)
         return np.array(lidar_data)
 
-class RayCastCallback(Box2D.b2RayCastCallback):
+class RayCastCallback(b2RayCastCallback):
     def __init__(self):
         super().__init__()
         self.hit = False
