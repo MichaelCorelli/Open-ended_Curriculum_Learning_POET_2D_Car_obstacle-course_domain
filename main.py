@@ -306,7 +306,7 @@ if __name__ == "__main__":
     env = CarEnvironment()
     poet = POET(
         E_init=env,
-        theta_init=None,
+        theta_init=np.zeros(),
         alpha=0.01,
         noise_std=0.1,
         T=10,
@@ -320,4 +320,5 @@ if __name__ == "__main__":
     #Create an agent and test its performance
     agent = poet.create_new_agent()
     total_reward = env.evaluate_agent(agent)
+    episodes = poet.main_loop()
     print(f"Total Reward: {total_reward}")
