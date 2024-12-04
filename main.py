@@ -30,7 +30,7 @@ class CarEnvironment(gym.Env):
         self.clock = pygame.time.Clock()
         self.world = world(gravity=(0, -10), doSleep=True)
         self.bodies = []
-        self.ramps = []
+        self.obstacles = []
         self.car = None
         self.camera = (0, 0)
 
@@ -59,7 +59,7 @@ class CarEnvironment(gym.Env):
         #Reset the simulation environment
         self.world = world(gravity=(0, -10), doSleep=True)
         self.bodies = []
-        self.ramps = []
+        self.obstacles = []
         self.car = Car(self.world, position=(10, 4))
         self.add_body(self.car.body, BLACK)
         self.add_body(self.car.wheel_front, BLACK)
@@ -71,10 +71,13 @@ class CarEnvironment(gym.Env):
         self.done = False
 
         #Initialize obstacles
-        self.add_obstacle(base_position=(20, 1), size=(8, 2), color=RED)
+        self.add_obstacle(base_position=(20, 1), size=(2, 2), color=RED, obstacle_type='ramp')
+        self.add_obstacle(base_position=(40, 1), size=(3, 2), color=RED, obstacle_type='hole')
+        self.add_obstacle(base_position=(60, 1), size=(4, 3), color=RED, obstacle_type='bump')
 
         return self._get_state()
 
+    '''
     def step(self, action):
         #Apply action to the car
         self.car.apply_action(action)
@@ -96,6 +99,7 @@ class CarEnvironment(gym.Env):
             self._add_new_obstacle()
 
         return state, reward, self.done, {}
+    '''
 
     def render(self, mode='human'):
         self.screen.fill(WHITE)
@@ -116,7 +120,7 @@ class CarEnvironment(gym.Env):
                                     int(shape.radius * PPM))
 
         # Render holes as black rectangles
-        for _, obstacle_type, base_position, width, _ in self.ramps:
+        for _, obstacle_type, base_position, width, _ in self.obstacles:
             if obstacle_type == "hole":
                 x, y = base_position
                 pygame.draw.rect(self.screen, BLACK,
@@ -143,11 +147,11 @@ class CarEnvironment(gym.Env):
             ramp = self.world.CreateStaticBody(position=(x, y),
                                             shapes=polygonShape(vertices=vertices))
             self.add_body(ramp, color)
-            self.ramps.append((ramp, obstacle_type, base_position, width, height))
+            self.obstacles.append((ramp, obstacle_type, base_position, width, height))
 
         elif obstacle_type == "hole":
             # Create a hole (gap with no physical body)
-            self.ramps.append((None, obstacle_type, base_position, width, height))
+            self.obstacles.append((None, obstacle_type, base_position, width, height))
 
         elif obstacle_type == "bump":
             # Create a bump
@@ -155,16 +159,11 @@ class CarEnvironment(gym.Env):
             bump = self.world.CreateStaticBody(position=(x, y),
                                             shapes=polygonShape(vertices=vertices))
             self.add_body(bump, color)
-            self.ramps.append((bump, obstacle_type, base_position, width, height))
+            self.obstacles.append((bump, obstacle_type, base_position, width, height))
 
         else:
             raise ValueError(f"Unsupported obstacle type: {obstacle_type}")
 
-    def modify_environment(self, params):
-        #Modify environment using POET
-        if "ramp_size" in params:
-            size = params["ramp_size"]
-            self.add_obstacle(base_position=(20, 1), size=size, color=RED)
 
     def evaluate_policy(self, theta):
         total_reward = 0
@@ -201,7 +200,7 @@ class CarEnvironment(gym.Env):
     def _check_done(self):
         car_x, car_y = self.car.body.position
         # Check if the car has fallen into a hole
-        for _, obstacle_type, base_position, width, _ in self.ramps:
+        for _, obstacle_type, base_position, width, _ in self.obstacles:
             if obstacle_type == "hole":
                 hole_x, hole_width = base_position[0], width
                 if hole_x <= car_x <= hole_x + hole_width and car_y < 1:
@@ -215,14 +214,14 @@ class CarEnvironment(gym.Env):
         return reward
 
     def _should_add_obstacle(self):
-        if not self.ramps:
+        if not self.obstacles:
             return False
-        last_ramp_x = self.ramps[-1][1][0] + self.ramps[-1][2]
+        last_ramp_x = self.obstacles[-1][1][0] + self.obstacles[-1][2]
         car_x = self.car.body.position[0]
         return car_x > last_ramp_x - 20
 
     def _add_new_obstacle(self):
-        last_ramp_x = self.ramps[-1][2][0] + self.ramps[-1][3]  # Last ramp position + width
+        last_ramp_x = self.obstacles[-1][2][0] + self.obstacles[-1][3]  # Last ramp position + width
         new_obstacle_x = last_ramp_x + random.uniform(5, 10)
         new_obstacle_y = 1
 

@@ -1,6 +1,5 @@
 import numpy as np
 from model import CarAgent
-from main import CarEnvironment
 
 class POET:
     def __init__(self, E_init, theta_init, alpha, noise_std, T, N_mutate, N_transfer, env_input_dim, hidden_dim, action_dim):
@@ -61,7 +60,11 @@ class POET:
                         "obstacle_type": obstacle_type,
                     }
 
-                    self.E_init = CarEnvironment.modify_environment(params)
+                    #self.E_init = CarEnvironment.modify_environment(params)
+                    
+                #def E_child(theta):
+                    #return E_parent(theta) + np.random.normal(0, 0.2)
+
                     return score
                 
                 theta_child = np.copy(theta_parent)
