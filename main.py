@@ -70,7 +70,7 @@ class CarEnvironment(gym.Env):
         self.camera = (0, 0)
         self.done = False
 
-        #Initialize ramps or obstacles
+        #Initialize obstacles
         self.add_obstacle(base_position=(20, 1), size=(8, 2), color=RED)
 
         return self._get_state()
@@ -98,7 +98,6 @@ class CarEnvironment(gym.Env):
         return state, reward, self.done, {}
 
     def render(self, mode='human'):
-       
         self.screen.fill(WHITE)
         for body, color in self.bodies:
             for fixture in body.fixtures:
@@ -106,15 +105,25 @@ class CarEnvironment(gym.Env):
                 if isinstance(shape, polygonShape):
                     vertices = [body.transform * v * PPM for v in shape.vertices]
                     vertices = [(v[0] - self.camera[0],
-                                 SCREEN_H - v[1] - self.camera[1]) for v in vertices]
+                                SCREEN_H - v[1] - self.camera[1]) for v in vertices]
                     pygame.draw.polygon(self.screen, color, vertices)
                 elif isinstance(shape, circleShape):
                     position = body.transform * shape.pos * PPM
                     position = (position[0] - self.camera[0],
                                 SCREEN_H - position[1] - self.camera[1])
                     pygame.draw.circle(self.screen, color,
-                                       [int(x) for x in position],
-                                       int(shape.radius * PPM))
+                                    [int(x) for x in position],
+                                    int(shape.radius * PPM))
+
+        # Render holes as black rectangles
+        for _, obstacle_type, base_position, width, _ in self.ramps:
+            if obstacle_type == "hole":
+                x, y = base_position
+                pygame.draw.rect(self.screen, BLACK,
+                                pygame.Rect(x * PPM - self.camera[0],
+                                            SCREEN_H - (y + 1) * PPM - self.camera[1],
+                                            width * PPM, 20))  # Adjust height visually for ground
+
         pygame.display.flip()
         self.clock.tick(FPS)
 
@@ -124,14 +133,32 @@ class CarEnvironment(gym.Env):
     def add_body(self, body, color):
         self.bodies.append((body, color))
 
-    def add_obstacle(self, base_position, size, color):
-        width, height = size
+    def add_obstacle(self, base_position, size, color, obstacle_type):
         x, y = base_position
-        vertices = [(0, 0), (width, 0), (width, height)]
-        ramp = self.world.CreateStaticBody(position=(x, y),
-                                           shapes=polygonShape(vertices=vertices))
-        self.add_body(ramp, color)
-        self.ramps.append((ramp, base_position, width, height))
+        width, height = size
+
+        if obstacle_type == "ramp":
+            # Create a ramp
+            vertices = [(0, 0), (width, 0), (width, height)]
+            ramp = self.world.CreateStaticBody(position=(x, y),
+                                            shapes=polygonShape(vertices=vertices))
+            self.add_body(ramp, color)
+            self.ramps.append((ramp, obstacle_type, base_position, width, height))
+
+        elif obstacle_type == "hole":
+            # Create a hole (gap with no physical body)
+            self.ramps.append((None, obstacle_type, base_position, width, height))
+
+        elif obstacle_type == "bump":
+            # Create a bump
+            vertices = [(0, 0), (width, 0), (width / 2, height), (0, 0)]
+            bump = self.world.CreateStaticBody(position=(x, y),
+                                            shapes=polygonShape(vertices=vertices))
+            self.add_body(bump, color)
+            self.ramps.append((bump, obstacle_type, base_position, width, height))
+
+        else:
+            raise ValueError(f"Unsupported obstacle type: {obstacle_type}")
 
     def modify_environment(self, params):
         #Modify environment using POET
@@ -172,7 +199,14 @@ class CarEnvironment(gym.Env):
         self.camera = (x, y)
 
     def _check_done(self):
-        return self.car.body.position[1] < 0
+        car_x, car_y = self.car.body.position
+        # Check if the car has fallen into a hole
+        for _, obstacle_type, base_position, width, _ in self.ramps:
+            if obstacle_type == "hole":
+                hole_x, hole_width = base_position[0], width
+                if hole_x <= car_x <= hole_x + hole_width and car_y < 1:
+                    return True  # Car fell into the hole
+        return car_y < 0  # Existing condition for falling below the ground
 
     def _calculate_reward(self):
         reward = self.car.body.position[0]
@@ -188,12 +222,22 @@ class CarEnvironment(gym.Env):
         return car_x > last_ramp_x - 20
 
     def _add_new_obstacle(self):
-        last_ramp_x = self.ramps[-1][1][0] + self.ramps[-1][2]
-        new_ramp_x = last_ramp_x + random.uniform(5, 10)
-        new_ramp_y = 1
-        new_ramp_size = (random.uniform(6, 10), random.uniform(2, 5))
-        self.add_obstacle(base_position=(new_ramp_x, new_ramp_y),
-                          size=new_ramp_size, color=RED)
+        last_ramp_x = self.ramps[-1][2][0] + self.ramps[-1][3]  # Last ramp position + width
+        new_obstacle_x = last_ramp_x + random.uniform(5, 10)
+        new_obstacle_y = 1
+
+        obstacle_type = random.choice(["ramp", "hole", "bump"])  # Random selection
+        if obstacle_type == "ramp":
+            size = (random.uniform(6, 10), random.uniform(2, 5))
+        elif obstacle_type == "hole":
+            size = (random.uniform(5, 8), 0)
+        elif obstacle_type == "bump":
+            size = (random.uniform(2, 4), random.uniform(0.5, 1.5))
+
+        self.add_obstacle(base_position=(new_obstacle_x, new_obstacle_y), 
+                        size=size, 
+                        color=RED, 
+                        obstacle_type=obstacle_type)
         
     
     def evaluate_agent(self, agent, max_steps=1000):
@@ -306,7 +350,7 @@ if __name__ == "__main__":
     env = CarEnvironment()
     poet = POET(
         E_init=env,
-        theta_init=np.zeros(),
+        theta_init=np.zeros(env_input_dim),
         alpha=0.01,
         noise_std=0.1,
         T=10,

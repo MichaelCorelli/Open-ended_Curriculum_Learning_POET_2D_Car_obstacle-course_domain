@@ -1,5 +1,6 @@
 import numpy as np
 from model import CarAgent
+from main import CarEnvironment
 
 class POET:
     def __init__(self, E_init, theta_init, alpha, noise_std, T, N_mutate, N_transfer, env_input_dim, hidden_dim, action_dim):
@@ -49,9 +50,19 @@ class POET:
         child_list = []
         for E_parent, theta_parent in parent_list:
             for _ in range(max_children // len(parent_list)):
-
                 def E_child(theta):
-                    return E_parent(theta) + np.random.normal(0, 0.2)
+                    score = E_parent(theta) + np.random.normal(0, 0.2)
+                    #Randomly decide obstacle type for the new child environment
+                    obstacle_type = np.random.choice(["ramp", "hole", "bump"])
+                    params = {
+                        "base_position": (np.random.uniform(10, 50), 1),
+                        "size": (np.random.uniform(2, 10), np.random.uniform(0.5, 5)),
+                        "color": (255, 0, 0),
+                        "obstacle_type": obstacle_type,
+                    }
+
+                    self.E_init = CarEnvironment.modify_environment(params)
+                    return score
                 
                 theta_child = np.copy(theta_parent)
                 child_list.append((E_child, theta_child))
