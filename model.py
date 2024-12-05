@@ -13,11 +13,21 @@ class PolicyNetwork(nn.Module):
         super(PolicyNetwork, self).__init__()
         self.model = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
+            nn.BatchNorm1d(hidden_dim),
+            nn.LeakyReLU(0.01),
+            nn.Dropout(0.2),
+            
             nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
+            nn.BatchNorm1d(hidden_dim),
+            nn.LeakyReLU(0.01),
+            nn.Dropout(0.2),
+            
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.LeakyReLU(0.01),
+            
             nn.Linear(hidden_dim, output_dim),
-            nn.Tanh()  #Outputs bounded between [-1, 1]
+            nn.Tanh()
         )
 
     def forward(self, x):
@@ -31,10 +41,19 @@ class ValueNetwork(nn.Module):
         super(ValueNetwork, self).__init__()
         self.model = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ELU(),
+            
             nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1)  #Single output -> state value
+            nn.BatchNorm1d(hidden_dim),
+            nn.ELU(),
+            nn.Dropout(0.2),
+            
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ELU(),
+            
+            nn.Linear(hidden_dim, 1)
         )
 
     def forward(self, x):
@@ -46,18 +65,18 @@ class ValueNetwork(nn.Module):
 #This structure supports advanced reinforcement learning methods, such as Actor-Critic,
 #where the policy and value networks work in tandem to improve agent performance.
 class CarAgent:
-    def __init__(self, input_dim, hidden_dim, output_dim, lr=0.001):
+    def __init__(self, input_dim, hidden_dim, output_dim, lr=0.001, weight_decay=1e-4):
         self.policy_network = PolicyNetwork(input_dim, hidden_dim, output_dim)
         self.value_network = ValueNetwork(input_dim, hidden_dim)
-        self.policy_optimizer = optim.Adam(self.policy_network.parameters(), lr=lr)
-        self.value_optimizer = optim.Adam(self.value_network.parameters(), lr=lr)
+        self.policy_optimizer = optim.Adam(self.policy_network.parameters(), lr=lr, weight_decay=weight_decay)
+        self.value_optimizer = optim.Adam(self.value_network.parameters(), lr=lr, weight_decay=weight_decay)
         self.criterion = nn.MSELoss()
 
     def select_action(self, state):
         #Selects an action using the policy network based on the current state.
-        state_tensor = torch.FloatTensor(state)
+        state_tensor = torch.FloatTensor(state).unsqueeze(0)
         with torch.no_grad():
-            action = self.policy_network(state_tensor).numpy()
+            action = self.policy_network(state_tensor).squeeze(0).numpy()
         return action
 
     def update_policy(self, rewards, states, actions, noise_std, alpha):
@@ -66,7 +85,7 @@ class CarAgent:
         states = torch.FloatTensor(states)
         actions = torch.FloatTensor(actions)
 
-        #Policy gradient update
+        #Policy gradient with random perturbations
         grads = []
         for eps in torch.randn((len(actions), len(actions[0]))) * noise_std:
             perturbed_action = actions + eps
