@@ -326,10 +326,42 @@ class RayCastCallback(b2RayCastCallback):
 
 #Main function to test the environment
 def main():
+
+
+
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+            poet.main_loop()
+
+    pygame.quit()
+
+
     env = CarEnvironment()
-    theta = np.random.randn(env.observation_space.shape[0])  # Random policy parameters
+    car = Car(env.world, p=(10, 4))
     agent = CarAgent(input_dim=env.env_input_dim, hidden_dim=env.hidden_dim, output_dim=env.action_dim, lr=0.001, weight_decay=1e-4)
 
+    theta = np.random.randn(env.observation_space.shape[0])  # Random policy parameters
+
+    env_input_dim = 4 + 10 #4 for position/velocity, 10 for LIDAR data
+    hidden_dim = 128    #NN hidden layer size
+    action_dim = 2      #Number of output actions
+
+    
+    poet = POET(car, agent, env, theta_init = np.zeros(4), alpha = 0.1, 
+                noise_std = 0.01, T = 100, N_mutate = 10, N_transfer = 5,
+                env_input_dim = 4, hidden_dim = 32, action_dim = 3)
+    poet.envs.append((lambda theta: env.evaluate_agent(agent), [np.zeros(4)]))
+
+    #Create an agent and test its performance
+    agent = poet.create_new_agent()
+    total_reward = env.evaluate_agent(agent)
+    episodes = poet.main_loop()
+    print(f"Total Reward: {total_reward}")
     
     state = env.reset()
     done = False
@@ -343,26 +375,4 @@ def main():
 
 if __name__ == "__main__":
     #To-Do: verify this values
-    env_input_dim = 4 + 10 #4 for position/velocity, 10 for LIDAR data
-    hidden_dim = 128    #NN hidden layer size
-    action_dim = 2      #Number of output actions
-
-    
-    poet = POET(
-        E_init=env,
-        theta_init=np.zeros(env_input_dim),
-        alpha=0.01,
-        noise_std=0.1,
-        T=10,
-        N_mutate=5,
-        N_transfer=5,
-        env_input_dim=env_input_dim,
-        hidden_dim=hidden_dim,
-        action_dim=action_dim
-    )
-
-    #Create an agent and test its performance
-    agent = poet.create_new_agent()
-    total_reward = env.evaluate_agent(agent)
-    episodes = poet.main_loop()
-    print(f"Total Reward: {total_reward}")
+    main()
