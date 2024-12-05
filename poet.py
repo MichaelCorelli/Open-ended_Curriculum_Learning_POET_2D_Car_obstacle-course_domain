@@ -181,7 +181,7 @@ class POET:
                 E = CarEnvironment()
                 self.envs[i] = (E, theta)
 
-            obstacle_type = random.choice(["ramp", "bump"])
+            obstacle_type = random.choice(["ramp", "bump", "hole"])
 
             width = random.uniform(6, 10)
             height = random.uniform(5, 20)
@@ -198,7 +198,7 @@ class POET:
                 "obstacle_type": obstacle_type
             }
 
-            E.modify_environment(modified_env_params)
+            E.modify_env(modified_env_params)
             reward = E.evaluate_agent(self.agent)
             print(f"Reward: {reward}")
 

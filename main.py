@@ -72,9 +72,9 @@ class CarEnvironment(gym.Env):
         self.done = False
 
         #Initialize obstacles
-        self.add_obstacle(base_position=(20, 1), size=(2, 2), color=RED, obstacle_type='ramp')
-        self.add_obstacle(base_position=(40, 1), size=(3, 2), color=RED, obstacle_type='hole')
-        self.add_obstacle(base_position=(60, 1), size=(4, 3), color=RED, obstacle_type='bump')
+        self.modify_env(base_position=(20, 1), size=(2, 2), color=RED, obstacle_type='ramp')
+        self.modify_env(base_position=(40, 1), size=(3, 2), color=RED, obstacle_type='hole')
+        self.modify_env(base_position=(60, 1), size=(4, 3), color=RED, obstacle_type='bump')
 
         return self._get_state()
 
@@ -138,32 +138,32 @@ class CarEnvironment(gym.Env):
     def add_body(self, body, color):
         self.bodies.append((body, color))
 
-    def add_obstacle(self, base_position, size, color, obstacle_type):
-        x, y = base_position
-        width, height = size
+    def modify_env(self, params):
+        x, y = params["base_position"]
+        width, height = params["size"]
 
-        if obstacle_type == "ramp":
+        if params["obstacle_type"] == "ramp":
             # Create a ramp
             vertices = [(0, 0), (width, 0), (width, height)]
             ramp = self.world.CreateStaticBody(position=(x, y),
                                             shapes=polygonShape(vertices=vertices))
-            self.add_body(ramp, color)
-            self.obstacles.append((ramp, obstacle_type, base_position, width, height))
+            self.add_body(ramp, params["color"])
+            self.obstacles.append((ramp, params["obstacle_type"], params["base_position"], params["size"]))
 
-        elif obstacle_type == "hole":
+        elif params["obstacle_type"] == "hole":
             # Create a hole (gap with no physical body)
-            self.obstacles.append((None, obstacle_type, base_position, width, height))
+            self.obstacles.append((None, params["obstacle_type"], params["base_position"], params["size"]))
 
-        elif obstacle_type == "bump":
+        elif params["obstacle_type"] == "bump":
             # Create a bump
             vertices = [(0, 0), (width, 0), (width / 2, height), (0, 0)]
             bump = self.world.CreateStaticBody(position=(x, y),
                                             shapes=polygonShape(vertices=vertices))
-            self.add_body(bump, color)
-            self.obstacles.append((bump, obstacle_type, base_position, width, height))
+            self.add_body(bump, params["color"])
+            self.obstacles.append((bump, params["obstacle_type"], params["base_position"], params["size"]))
 
         else:
-            raise ValueError(f"Unsupported obstacle type: {obstacle_type}")
+            raise ValueError(f"Unsupported obstacle type: {params["obstacle_type"]}")
 
 
     def evaluate_policy(self, theta):
@@ -234,7 +234,7 @@ class CarEnvironment(gym.Env):
         elif obstacle_type == "bump":
             size = (random.uniform(2, 4), random.uniform(0.5, 1.5))
 
-        self.add_obstacle(base_position=(new_obstacle_x, new_obstacle_y), 
+        self.modify_env(base_position=(new_obstacle_x, new_obstacle_y), 
                         size=size, 
                         color=RED, 
                         obstacle_type=obstacle_type)
@@ -326,42 +326,10 @@ class RayCastCallback(b2RayCastCallback):
 
 #Main function to test the environment
 def main():
-
-
-
-
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
-            poet.main_loop()
-
-    pygame.quit()
-
-
     env = CarEnvironment()
-    car = Car(env.world, p=(10, 4))
+    theta = np.random.randn(env.observation_space.shape[0])  # Random policy parameters
     agent = CarAgent(input_dim=env.env_input_dim, hidden_dim=env.hidden_dim, output_dim=env.action_dim, lr=0.001, weight_decay=1e-4)
 
-    theta = np.random.randn(env.observation_space.shape[0])  # Random policy parameters
-
-    env_input_dim = 4 + 10 #4 for position/velocity, 10 for LIDAR data
-    hidden_dim = 128    #NN hidden layer size
-    action_dim = 2      #Number of output actions
-
-    
-    poet = POET(car, agent, env, theta_init = np.zeros(4), alpha = 0.1, 
-                noise_std = 0.01, T = 100, N_mutate = 10, N_transfer = 5,
-                env_input_dim = 4, hidden_dim = 32, action_dim = 3)
-    poet.envs.append((lambda theta: env.evaluate_agent(agent), [np.zeros(4)]))
-
-    #Create an agent and test its performance
-    agent = poet.create_new_agent()
-    total_reward = env.evaluate_agent(agent)
-    episodes = poet.main_loop()
-    print(f"Total Reward: {total_reward}")
     
     state = env.reset()
     done = False
@@ -375,4 +343,26 @@ def main():
 
 if __name__ == "__main__":
     #To-Do: verify this values
-    main()
+    env_input_dim = 4 + 10 #4 for position/velocity, 10 for LIDAR data
+    hidden_dim = 128    #NN hidden layer size
+    action_dim = 2      #Number of output actions
+
+    
+    poet = POET(
+        E_init=env,
+        theta_init=np.zeros(env_input_dim),
+        alpha=0.01,
+        noise_std=0.1,
+        T=10,
+        N_mutate=5,
+        N_transfer=5,
+        env_input_dim=env_input_dim,
+        hidden_dim=hidden_dim,
+        action_dim=action_dim
+    )
+
+    #Create an agent and test its performance
+    agent = poet.create_new_agent()
+    total_reward = env.evaluate_agent(agent)
+    episodes = poet.main_loop()
+    print(f"Total Reward: {total_reward}")
