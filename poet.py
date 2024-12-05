@@ -40,7 +40,7 @@ class POET:
         self.archive_envs = []
 
     def eligible_to_reproduce(self, E, theta):
-        score = E(theta)
+        score = E.evaluate_agent(self.agent, theta)
         print(f"Score: {score}, Threshold: {self.threshold_el}")
         return score >= self.threshold_el
 
@@ -57,7 +57,7 @@ class POET:
                 continue
 
         for E_child, theta_child in child_list:
-            score = E_child(theta_child)
+            score = E_child.evaluate_agent(self.agent, theta_child)
             if self.threshold_c_min <= score <= self.threshold_c_max:
                 res.append((E_child, theta_child))
 
@@ -71,7 +71,8 @@ class POET:
         for E_child, theta_child in child_list:
             dist = []
             for E, theta in e:
-                dist.append(abs(E_child(np.zeros_like(theta)) - E(np.zeros_like(theta))))
+                score_diff = E_child.evaluate_agent(self.agent, np.zeros_like(theta)) - E.evaluate_agent(self.agent, np.zeros_like(theta))
+                dist.append(abs(score_diff))
 
             novelty_score = np.mean(dist)
             print(f"{theta_child} novelty score: {novelty_score}")
@@ -91,23 +92,26 @@ class POET:
 
         for E_parent, theta_parent in parent_list:
             for _ in range(max_children // len(parent_list)):
-                obstacle_factor = np.random.normal(0, 0.5)
-                print(f"obstacle_factor: {obstacle_factor}")
-                score = E_parent(theta_parent) + obstacle_factor
-                print(f"{theta_parent} score: {score} with obstacle_factor: {obstacle_factor}")
+                
+                E_child = E_parent.clone()  
+                E_child.mutate_environment() 
+
+                score = E_child.evaluate_agent(self.agent, theta_parent)
+                print(f"{theta_parent} score: {score} in new environment")
 
                 theta_child = np.copy(theta_parent)
-                child_tuple = (E_parent, theta_child)
+                child_tuple = (E_child, theta_child)
 
                 if not isinstance(child_tuple, tuple) or len(child_tuple) != 2:
                     print(f"Not valid child_tuple format: {child_tuple}")
                     continue
 
-                self.envs.append((E_parent, theta_child))
+                self.envs.append((E_child, theta_child))
                 child_list.append(child_tuple)
 
         print(f"child_list: {child_list}")
         return child_list
+
 
     def mutate_envs(self, EA_list):
         parent_list = []
@@ -156,24 +160,25 @@ class POET:
         else:
             epsilon = np.random.randn(self.n, 1)
 
-        E_i = np.array([E_m(theta_m_t + noise_std * epsilon_i) for epsilon_i in epsilon])
+        E_i = np.array([E_m.evaluate_agent(self.agent, theta_m_t + noise_std * epsilon_i) for epsilon_i in epsilon])
 
-        res = 0
-        for i in range(self.n):
-            res += E_i[i] * epsilon[i]
+        res = np.sum(E_i[:, np.newaxis] * epsilon, axis=0)
 
         return alpha * (1 / self.n * noise_std) * res
     
-    def evaluate_candidates(self, theta, E, alpha, noise_std):
+    def evaluate_candidates(self, theta_list, E, alpha, noise_std):
         C = []
-        
-        M = len(theta)
+        M = len(theta_list)
         for m in range(M):
-            theta_m = np.asarray(theta[m])
-            C.append(theta[m])
-            C.append(theta[m] + self.es_step(theta[m], E, alpha, noise_std))
+            theta_m = np.asarray(theta_list[m])
+            C.append(theta_m)
+            C.append(theta_m + self.es_step(theta_m, E, alpha, noise_std))
 
-        return np.argmax([E(theta) for theta in C])
+        performances = [E.evaluate_agent(self.agent, theta) for theta in C]
+        best_index = np.argmax(performances)
+        best_theta = C[best_index]
+        return best_theta
+
     
     def update_environments(self, t):
         for i, (E, theta) in enumerate(self.envs):

@@ -72,11 +72,9 @@ class CarAgent:
         self.value_optimizer = optim.Adam(self.value_network.parameters(), lr=lr, weight_decay=weight_decay)
         self.criterion = nn.MSELoss()
 
-    def select_action(self, state):
-        #Selects an action using the policy network based on the current state.
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
-        with torch.no_grad():
-            action = self.policy_network(state_tensor).squeeze(0).numpy()
+    def select_action(self, state, theta):
+        action = np.dot(theta, state)
+        action = np.clip(action, -1.0, 1.0)  # Ensure actions are within the action space
         return action
 
     def update_policy(self, rewards, states, actions, noise_std, alpha):
