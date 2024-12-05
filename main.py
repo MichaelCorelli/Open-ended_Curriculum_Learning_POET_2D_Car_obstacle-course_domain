@@ -330,19 +330,6 @@ def main():
     theta = np.random.randn(env.observation_space.shape[0])  # Random policy parameters
     agent = CarAgent(input_dim=env.env_input_dim, hidden_dim=env.hidden_dim, output_dim=env.action_dim, lr=0.001, weight_decay=1e-4)
 
-    
-    state = env.reset()
-    done = False
-    while not done:
-        action = env.policy(theta, state)
-        state, reward, done, _ = env.step(action)
-        env.render()
-
-    env.close()
-
-
-if __name__ == "__main__":
-    #To-Do: verify this values
     env_input_dim = 4 + 10 #4 for position/velocity, 10 for LIDAR data
     hidden_dim = 128    #NN hidden layer size
     action_dim = 2      #Number of output actions
@@ -366,3 +353,17 @@ if __name__ == "__main__":
     total_reward = env.evaluate_agent(agent)
     episodes = poet.main_loop()
     print(f"Total Reward: {total_reward}")
+    
+    state = env.reset()
+    done = False
+    while not done:
+        action = env.policy(theta, state)
+        state, reward, done, _ = env.step(action)
+        env.render()
+
+    env.close()
+
+
+if __name__ == "__main__":
+    #To-Do: verify this values
+    main()
