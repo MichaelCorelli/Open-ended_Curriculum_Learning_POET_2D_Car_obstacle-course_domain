@@ -163,7 +163,7 @@ class CarEnvironment(gym.Env):
             self.obstacles.append((bump, params["obstacle_type"], params["base_position"], params["size"]))
 
         else:
-            raise ValueError(f"Unsupported obstacle type: {params["obstacle_type"]}")
+            raise ValueError(f"Unsupported obstacle type")
 
 
     def evaluate_policy(self, theta):
@@ -327,20 +327,6 @@ class RayCastCallback(b2RayCastCallback):
 #Main function to test the environment
 def main():
 
-
-
-
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
-            poet.main_loop()
-
-    pygame.quit()
-
-
     env = CarEnvironment()
     car = Car(env.world, p=(10, 4))
     agent = CarAgent(input_dim=env.env_input_dim, hidden_dim=env.hidden_dim, output_dim=env.action_dim, lr=0.001, weight_decay=1e-4)
@@ -354,14 +340,8 @@ def main():
     
     poet = POET(car, agent, env, theta_init = np.zeros(4), alpha = 0.1, 
                 noise_std = 0.01, T = 100, N_mutate = 10, N_transfer = 5,
-                env_input_dim = 4, hidden_dim = 32, action_dim = 3)
+                env_input_dim = env_input_dim, hidden_dim = hidden_dim, action_dim = action_dim)
     poet.envs.append((lambda theta: env.evaluate_agent(agent), [np.zeros(4)]))
-
-    #Create an agent and test its performance
-    agent = poet.create_new_agent()
-    total_reward = env.evaluate_agent(agent)
-    episodes = poet.main_loop()
-    print(f"Total Reward: {total_reward}")
     
     state = env.reset()
     done = False
@@ -371,6 +351,16 @@ def main():
         env.render()
 
     env.close()
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+            poet.main_loop()
+
+    pygame.quit()
 
 
 if __name__ == "__main__":
