@@ -8,6 +8,7 @@ from gymnasium import spaces
 from model import CarAgent
 from poet import POET
 
+
 #Constants
 PPM = 20.0  #pixels x meter
 FPS = 60
@@ -327,6 +328,7 @@ class RayCastCallback(b2RayCastCallback):
 def main():
     env = CarEnvironment()
     theta = np.random.randn(env.observation_space.shape[0])  # Random policy parameters
+    agent = CarAgent(input_dim=env.env_input_dim, hidden_dim=env.hidden_dim, output_dim=env.action_dim, lr=0.001, weight_decay=1e-4)
 
     
     state = env.reset()
@@ -346,7 +348,6 @@ if __name__ == "__main__":
     action_dim = 2      #Number of output actions
 
     
-    env = CarEnvironment()
     poet = POET(
         E_init=env,
         theta_init=np.zeros(env_input_dim),
