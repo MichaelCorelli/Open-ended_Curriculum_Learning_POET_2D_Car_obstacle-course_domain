@@ -1,7 +1,7 @@
 import numpy as np
 import random
 import pygame
-from env import Environment
+from main import CarEnvironment
 
 RED = (255, 0, 0)
 
@@ -177,8 +177,8 @@ class POET:
     
     def update_environments(self, t):
         for i, (E, theta) in enumerate(self.envs):
-            if E is None or not isinstance(E, Environment):
-                E = Environment()
+            if E is None or not isinstance(E, CarEnvironment):
+                E = CarEnvironment()
                 self.envs[i] = (E, theta)
 
             obstacle_type = random.choice(["ramp", "bump"])
