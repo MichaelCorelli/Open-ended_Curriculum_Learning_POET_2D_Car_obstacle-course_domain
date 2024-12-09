@@ -1,7 +1,7 @@
 import numpy as np
 import random
 import pygame
-from main import CarEnvironment
+from env import CarEnvironment
 
 RED = (255, 0, 0)
 
