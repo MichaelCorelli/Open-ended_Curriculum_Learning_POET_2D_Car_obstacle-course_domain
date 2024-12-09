@@ -320,16 +320,10 @@ class CarEnvironment(gym.Env):
                         obstacle_type=obstacle_type)
         
     
-    def evaluate_agent(self, agent, theta, max_steps=1000):
-        state = self.reset()
-        total_reward = 0
-        for _ in range(max_steps):
-            action = agent.select_action(state, theta)
-            state, reward, done, _ = self.step(action)
-            total_reward += reward
-            if done:
-                break
-        return total_reward
+    def evaluate_agent(self, agent_ddqn, theta = None):
+        if theta is not None:
+            agent_ddqn.network.network.load_state_dict(theta)
+        return agent_ddqn.evaluate(self)
 
 
 

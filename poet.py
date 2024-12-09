@@ -6,9 +6,9 @@ from env import CarEnvironment
 RED = (255, 0, 0)
 
 class POET:
-    def __init__(self, car, agent, E_init, theta_init, alpha, noise_std, T, N_mutate, N_transfer, env_input_dim, hidden_dim, action_dim):
+    def __init__(self, car, ddqn_agent, E_init, theta_init, alpha, noise_std, T, N_mutate, N_transfer, env_input_dim, hidden_dim, action_dim):
         self.car = car
-        self.agent = agent
+        self.ddqn_agent = ddqn_agent
         
         self.E_init = E_init
         self.theta_init = theta_init
@@ -38,9 +38,11 @@ class POET:
         #environment for novelty
         self.envs = []
         self.archive_envs = []
+        #max size for archive_envs
+        self.archive_envs_max_size = 5
 
     def eligible_to_reproduce(self, E, theta):
-        score = E.evaluate_agent(self.agent, theta)
+        score = E.evaluate_agent(self.ddqn_agent, theta)
         print(f"Score: {score}, Threshold: {self.threshold_el}")
         return score >= self.threshold_el
 
@@ -57,7 +59,7 @@ class POET:
                 continue
 
         for E_child, theta_child in child_list:
-            score = E_child.evaluate_agent(self.agent, theta_child)
+            score = E_child.evaluate_agent(self.ddqn_agent, theta_child)
             if self.threshold_c_min <= score <= self.threshold_c_max:
                 res.append((E_child, theta_child))
 
@@ -71,7 +73,7 @@ class POET:
         for E_child, theta_child in child_list:
             dist = []
             for E, theta in e:
-                score_diff = E_child.evaluate_agent(self.agent, np.zeros_like(theta)) - E.evaluate_agent(self.agent, np.zeros_like(theta))
+                score_diff = E_child.evaluate_agent(self.ddqn_agent, np.zeros_like(theta)) - E.evaluate_agent(self.ddqn_agent, np.zeros_like(theta))
                 dist.append(abs(score_diff))
 
             novelty_score = np.mean(dist)
@@ -86,6 +88,10 @@ class POET:
     def remove_oldest(self, EA_list, num_removals):
         del EA_list[:num_removals]
 
+    def archive(self, archive_envs_max_size):
+        if len(self.archive_envs) > archive_envs_max_size:
+            self.archive_envs = self.archive_envs[-archive_envs_max_size:]
+
     def env_reproduce(self, parent_list, max_children):
         child_list = []
         print(f"parent_list: {parent_list}")
@@ -96,7 +102,7 @@ class POET:
                 E_child = E_parent.clone()  
                 E_child.mutate_environment() 
 
-                score = E_child.evaluate_agent(self.agent, theta_parent)
+                score = E_child.evaluate_agent(self.ddqn_agent, theta_parent)
                 print(f"{theta_parent} score: {score} in new environment")
 
                 theta_child = np.copy(theta_parent)
@@ -148,9 +154,14 @@ class POET:
         M = len(EA_list)
         if M > self.capacity:
             num_removals = M - self.capacity
-            self.remove_oldest(EA_list, num_removals)
+            removed = self.envs[:num_removals]
+            self.envs = self.envs[num_removals:]
+            self.archive_envs.extend(removed)
+
+        self.archive(archive_envs_max_size = self.archive_envs_max_size)
 
         return EA_list
+
 
     def es_step(self, theta_m_t, E_m, alpha, noise_std):
         theta_m_t = np.asarray(theta_m_t)
@@ -160,12 +171,14 @@ class POET:
         else:
             epsilon = np.random.randn(self.n, 1)
 
-        E_i = np.array([E_m.evaluate_agent(self.agent, theta_m_t + noise_std * epsilon_i) for epsilon_i in epsilon])
+        E_i = np.array([E_m.evaluate_agent(self.ddqn_agent, theta_m_t + noise_std * epsilon_i) for epsilon_i in epsilon])
 
         res = np.sum(E_i[:, np.newaxis] * epsilon, axis=0)
 
         return alpha * (1 / self.n * noise_std) * res
     
+    #evaluate_candidiates con es_step
+    '''
     def evaluate_candidates(self, theta_list, E, alpha, noise_std):
         C = []
         M = len(theta_list)
@@ -174,15 +187,30 @@ class POET:
             C.append(theta_m)
             C.append(theta_m + self.es_step(theta_m, E, alpha, noise_std))
 
-        performances = [E.evaluate_agent(self.agent, theta) for theta in C]
+        performances = [E.evaluate_agent(self.ddqn_agent, theta) for theta in C]
         best_index = np.argmax(performances)
         best_theta = C[best_index]
         return best_theta
+    '''
 
+    #evaluate_candidiates con ddqn_agent
+    def evaluate_candidates(self, theta_list, E):
+        performances = []
+        for theta in theta_list:
+            
+            self.ddqn_agent.network.load_state_dict(theta)
+            self.ddqn_agent.train(e_max = 3)
+            p = E.evaluate_agent(self.ddqn_agent, theta)
+            performances.append(p)
+
+        best_index = np.argmax(performances)
+        best_theta = theta_list[best_index]
+
+        return best_theta
     
     def update_environments(self, t):
         for i, (E, theta) in enumerate(self.envs):
-            if E is None or not isinstance(E, CarEnvironment):
+            if E is None:
                 E = CarEnvironment()
                 self.envs[i] = (E, theta)
 
@@ -204,7 +232,7 @@ class POET:
             }
 
             E.modify_env(modified_env_params)
-            reward = E.evaluate_agent(self.agent)
+            reward = E.evaluate_agent(self.ddqn_agent)
             print(f"Reward: {reward}")
 
     def main_loop(self):
@@ -219,13 +247,20 @@ class POET:
             M = len(EA_list)
             for m in range(M):
                 E_m, theta_m_t = EA_list[m]
-                theta_m_t_1 = theta_m_t + self.es_step(theta_m_t, E_m, self.alpha, self.noise_std)
+
+                self.ddqn_agent.env = E_m
+
+                print(f"Training agent on env: {m}")
+                self.agent_ddqn.train(e_max = 10, gamma = 0.99, frequency_update = 10, frequency_sync = 100)
+
+                #theta_m_t_1 = theta_m_t + self.es_step(theta_m_t, E_m, self.alpha, self.noise_std)
+                theta_m_t_1 = self.agent_ddqn.network.network.state_dict()
 
                 if M > 1 and t % self.N_transfer == 0:
                     theta_b_a_m = [theta for j, (_, theta) in enumerate(EA_list) if j != m]
                     theta_top = self.evaluate_candidates(theta_b_a_m, E_m, self.alpha, self.noise_std)
                     print(f"theta_top: {theta_top}")
-                    if E_m(theta_top) > E_m(theta_m_t_1):
+                    if E_m.evaluate_agent(self.ddqn_agent, theta_top) > E_m.evaluate_agent(self.ddqn_agent, theta_m_t_1):
                         theta_m_t_1 = theta_top
 
                 EA_list[m] = (E_m, theta_m_t_1)
