@@ -163,7 +163,8 @@ class POET:
 
         return EA_list
 
-
+    #es_step
+    '''
     def es_step(self, theta_m_t, E_m, alpha, noise_std):
         theta_m_t = np.asarray(theta_m_t)
 
@@ -174,9 +175,10 @@ class POET:
 
         E_i = np.array([E_m.evaluate_agent(self.ddqn_agent, theta_m_t + noise_std * epsilon_i) for epsilon_i in epsilon])
 
-        res = np.sum(E_i[:, np.newaxis] * epsilon, axis=0)
+        res = np.sum(E_i[:, np.newaxis] * epsilon, axis = 0)
 
         return alpha * (1 / self.n * noise_std) * res
+    '''
     
     #evaluate_candidiates con es_step
     '''
@@ -189,23 +191,38 @@ class POET:
             C.append(theta_m + self.es_step(theta_m, E, alpha, noise_std))
 
         performances = [E.evaluate_agent(self.ddqn_agent, theta) for theta in C]
-        best_index = np.argmax(performances)
-        best_theta = C[best_index]
+        i_best = np.argmax(performances)
+        best_theta = C[i_best]
         return best_theta
     '''
 
     #evaluate_candidiates con ddqn_agent
     def evaluate_candidates(self, theta_list, E, alpha, noise_std):
+        theta_m_t = np.mean(theta_list, axis = 0)
+
+        epsilon = np.random.randn(self.n, *theta_m_t.shape)
+        E_i = []
+
+        for epsilon_i in epsilon:
+            theta_variation = theta_m_t + noise_std * epsilon_i
+            self.ddqn_agent.network.network.load_state_dict(theta_variation)
+            self.ddqn_agent.train(e_max = 3)
+            performance = E.evaluate_agent(self.ddqn_agent, theta_variation)
+            E_i.append(performance)
+
+        E_i = np.array(E_i)
+        gradient_estimation = np.sum(E_i[:, np.newaxis] * epsilon, axis = 0)
+        theta_updated = theta_m_t + alpha * (1 / (self.n * noise_std)) * gradient_estimation
+
+        C = theta_list + [theta_updated]
         performances = []
-        for theta in theta_list:
-            
+        for theta in C:
             self.ddqn_agent.network.network.load_state_dict(theta)
             self.ddqn_agent.train(e_max = 3)
-            p = E.evaluate_agent(self.ddqn_agent, theta)
-            performances.append(p)
+            performances.append(E.evaluate_agent(self.ddqn_agent, theta))
 
-        best_index = np.argmax(performances)
-        best_theta = theta_list[best_index]
+        i_best = np.argmax(performances)
+        best_theta = C[i_best]
 
         return best_theta
     
