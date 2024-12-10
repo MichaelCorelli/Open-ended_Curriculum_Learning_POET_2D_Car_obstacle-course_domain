@@ -1,3 +1,4 @@
+#env.py
 import pygame
 import random
 import numpy as np
@@ -103,9 +104,9 @@ class CarEnvironment(gym.Env):
         self.done = False
 
         #Initialize obstacles
-        self.modify_env(base_position=(20, 1), size=(2, 2), color=RED, obstacle_type='ramp')
-        self.modify_env(base_position=(40, 1), size=(3, 2), color=RED, obstacle_type='hole')
-        self.modify_env(base_position=(60, 1), size=(4, 3), color=RED, obstacle_type='bump')
+        self.modify_env({"base_position":(20, 1), "size":(2, 2), "color": RED, "obstacle_type":'ramp'})
+        self.modify_env({"base_position":(40, 1), "size":(3, 2), "color":RED, "obstacle_type":'hole'})
+        self.modify_env({"base_position":(60, 1), "size":(4, 3), "color":RED, "obstacle_type":'bump'})
 
         return self._get_state()
 
@@ -159,9 +160,10 @@ class CarEnvironment(gym.Env):
                     self.screen.blit(rotated_wheel, (wheel_x, wheel_y))
 
         # Render holes as black rectangles
-        for _, obstacle_type, base_position, width, _ in self.obstacles:
-            if obstacle_type == "hole":
-                x, y = base_position
+        for obs in self.obstacles:
+            if obs['type'] == "hole":
+                x, y = obs['params']['base_position']
+                width = obs['params']['size'][0]
                 pygame.draw.rect(self.screen, BLACK,
                                 pygame.Rect(x * PPM - self.camera[0],
                                             SCREEN_H - (y + 1) * PPM - self.camera[1],
@@ -266,7 +268,7 @@ class CarEnvironment(gym.Env):
         car_pos = self.car.body.position
         car_vel = self.car.body.linearVelocity
         #Get LiDAR Data
-        lidar_data = self.car.get_lidar_data(num_sensors=5, angle_range=(-np.pi/6, np.pi/6))
+        lidar_data = self.car.get_lidar_data(num_sensors=5, max_distance=20, angle_range=(-np.pi/6, np.pi/6))
         return np.concatenate(([car_pos[0], car_pos[1], car_vel[0], car_vel[1]], lidar_data))
 
     def _update_camera(self):
@@ -281,11 +283,15 @@ class CarEnvironment(gym.Env):
     def _check_done(self):
         car_x, car_y = self.car.body.position
         # Check if the car has fallen into a hole
-        for _, obstacle_type, base_position, width, _ in self.obstacles:
-            if obstacle_type == "hole":
-                hole_x, hole_width = base_position[0], width
+        for obs in self.obstacles:
+            if obs['type'] == "hole":
+                base_pos = obs['params']['base_position']
+                size = obs['params']['size']
+                hole_x, hole_width = base_pos[0], size[0]
+
                 if hole_x <= car_x <= hole_x + hole_width and car_y < 1:
                     return True  # Car fell into the hole
+
         return car_y < 0  # Existing condition for falling below the ground
 
     def _calculate_reward(self):
@@ -297,13 +303,20 @@ class CarEnvironment(gym.Env):
     def _should_add_obstacle(self):
         if not self.obstacles:
             return False
-        last_ramp_x = self.obstacles[-1][1][0] + self.obstacles[-1][2]
+        last_obs = self.obstacles[-1]
+        base_pos = last_obs['params']['base_position']
+        size = last_obs['params']['size']
+        #Compute the end of the last obstacle
+        last_pos_x = base_pos[0] + size[0]
         car_x = self.car.body.position[0]
-        return car_x > last_ramp_x - 20
+        return car_x > last_pos_x - 20
 
     def _add_new_obstacle(self):
-        last_ramp_x = self.obstacles[-1][2][0] + self.obstacles[-1][3]  # Last ramp position + width
-        new_obstacle_x = last_ramp_x + random.uniform(5, 10)
+        last_obs = self.obstacles[-1]
+        base_pos = last_obs['params']['base_position']
+        size = last_obs['params']['size']
+        last_pos_x = base_pos[0] + size[0]
+        new_obstacle_x = last_pos_x + random.uniform(5, 10)
         new_obstacle_y = 1
 
         obstacle_type = random.choice(["ramp", "hole", "bump"])  # Random selection
@@ -320,10 +333,10 @@ class CarEnvironment(gym.Env):
                         obstacle_type=obstacle_type)
         
     
-    def evaluate_agent(self, agent_ddqn, theta = None):
+    def evaluate_agent(self, ddqn_agent, theta):
         if theta is not None:
-            agent_ddqn.network.network.load_state_dict(theta)
-        return agent_ddqn.evaluate(self)
+            ddqn_agent.network.network.load_state_dict(theta)
+        return ddqn_agent.evaluate(self)
 
 
 

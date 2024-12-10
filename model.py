@@ -1,3 +1,4 @@
+#model.py
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,9 +10,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 #Actor-Critic framework
 
-#The Policy Network is responsible for determining the actions the agent should take
-#based on the current state of the environment. It outputs continuous values that 
-#represent the agent's decisions, such as speed and steering adjustments.
 class PolicyNetwork(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super(PolicyNetwork, self).__init__()
@@ -37,9 +35,7 @@ class PolicyNetwork(nn.Module):
     def forward(self, x):
         return self.model(x)
     
-#The Value Network is used to estimate the value of a given state. The value represents 
-#the expected cumulative reward the agent can achieve from that state. This is used 
-#for evaluating how good a particular state is in reinforcement learning.
+
 class ValueNetwork(nn.Module):
     def __init__(self, input_dim, hidden_dim):
         super(ValueNetwork, self).__init__()
@@ -63,7 +59,7 @@ class ValueNetwork(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-def tesor(tuple):
+def tensor(tuple):
     return torch.stack([torch.tensor(j, dtype = torch.float32, device = device) for j in tuple])
 
 class Buffer:
@@ -90,29 +86,32 @@ class Buffer:
         return s, a, r, d, ns
 
 class Q(nn.Module):
-
     def __init__(self, env, lr):
         super(Q, self).__init__()
+        input_dim = env.observation_space.shape[0]
+        hidden_dim = 128
+        output_dim = env.action_space.shape[0] 
         self.lr = lr
-        self.network = PolicyNetwork(env.observation_space._shape[0], env.action_space.n)
-        self.optimizer = torch.optim.Adam(self.network.parameters(), lr = lr)
+        
+        self.network = PolicyNetwork(input_dim, hidden_dim, output_dim)
+        self.optimizer = torch.optim.Adam(self.network.parameters(), lr=self.lr)
 
     def greedy_a(self, state):
         q_v = self.network(state)
-        greedy_a = torch.max(q_v, dim = -1)[1].item()
-        return greedy_a
+        action = q_v.cpu().detach().numpy()[0]
+        return action
 
 class DDQN:
-
     def __init__(self, env, b, lr, epsilon_initial, batch_size, threshold_r):
         self.env = env
-        self.network = Q(env, lr).to(device)
-        self.network_t = Q(env, lr).to(device)
         self.b = b
         self.lr = lr
         self.epsilon_initial = epsilon_initial
         self.batch_size = batch_size
         self.threshold_r = threshold_r
+        
+        self.network = Q(env, lr=self.lr).to(device)
+        self.network_t = Q(env, lr=self.lr).to(device)
 
         self.step_c = 0
         self.rewards = 0
@@ -244,7 +243,7 @@ class DDQN:
         plt.plot(self.train_mean_rewards)
         plt.title('Train: mean rewards')
         plt.ylabel('reward')
-        plt.xlabel('episods')
+        plt.xlabel('episodes')
         plt.show()
         plt.savefig('train_mean_rewards.png')
         plt.clf()

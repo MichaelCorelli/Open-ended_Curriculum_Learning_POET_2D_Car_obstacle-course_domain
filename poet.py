@@ -1,3 +1,4 @@
+#poet.py
 import numpy as np
 import random
 import pygame
@@ -194,11 +195,11 @@ class POET:
     '''
 
     #evaluate_candidiates con ddqn_agent
-    def evaluate_candidates(self, theta_list, E):
+    def evaluate_candidates(self, theta_list, E, alpha, noise_std):
         performances = []
         for theta in theta_list:
             
-            self.ddqn_agent.network.load_state_dict(theta)
+            self.ddqn_agent.network.network.load_state_dict(theta)
             self.ddqn_agent.train(e_max = 3)
             p = E.evaluate_agent(self.ddqn_agent, theta)
             performances.append(p)
@@ -251,10 +252,10 @@ class POET:
                 self.ddqn_agent.env = E_m
 
                 print(f"Training agent on env: {m}")
-                self.agent_ddqn.train(e_max = 10, gamma = 0.99, frequency_update = 10, frequency_sync = 100)
+                self.ddqn_agent.train(e_max = 10, gamma = 0.99, frequency_update = 10, frequency_sync = 100)
 
                 #theta_m_t_1 = theta_m_t + self.es_step(theta_m_t, E_m, self.alpha, self.noise_std)
-                theta_m_t_1 = self.agent_ddqn.network.network.state_dict()
+                theta_m_t_1 = self.ddqn_agent.network.network.state_dict()
 
                 if M > 1 and t % self.N_transfer == 0:
                     theta_b_a_m = [theta for j, (_, theta) in enumerate(EA_list) if j != m]

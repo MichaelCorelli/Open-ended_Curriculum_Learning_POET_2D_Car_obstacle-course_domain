@@ -1,32 +1,30 @@
 import pygame
-import numpy as np
-from model import CarAgent
+from model import DDQN, Buffer
 from poet import POET
 from env import CarEnvironment, Car
 
-#Main function to test the environment
+
 def main():
    
     env = CarEnvironment()
     car = Car(env.world, position=(10, 4))
-    
-    # Initialize agent
-    agent = CarAgent(
-        input_dim=env.observation_space.shape[0],
-        hidden_dim=128,
-        output_dim=2,
-        lr=0.001,
-        weight_decay=1e-4
-    )
-    
-    #Initialize initial policy parameters theta
-    theta_init = np.zeros(env.observation_space.shape[0])
+    b = Buffer()
+    theta_init = agent.network.network.state_dict()
     E_init = env
+    
+    agent = DDQN(
+        env=env, 
+        b=b, 
+        lr=0.001, 
+        epsilon_initial = 0.5, 
+        batch_size = 64, 
+        threshold_r = 200
+    )
     
     # Initialize POET
     poet = POET(
         car=car,
-        agent=agent,
+        ddqn_agent=agent,
         E_init=E_init,
         theta_init=theta_init,
         alpha=0.1,
@@ -38,7 +36,6 @@ def main():
         hidden_dim=128,
         action_dim=2
     )
-
     
     poet.main_loop()
 
