@@ -1,3 +1,4 @@
+#main.py
 import pygame
 from model import DDQN, Buffer
 from poet import POET
@@ -9,8 +10,7 @@ def main():
     env = CarEnvironment()
     car = Car(env.world, position=(10, 4))
     b = Buffer()
-    theta_init = agent.network.network.state_dict()
-    E_init = env
+    
     
     agent = DDQN(
         env=env, 
@@ -20,6 +20,9 @@ def main():
         batch_size = 64, 
         threshold_r = 200
     )
+    
+    theta_init = agent.network.network.state_dict()
+    E_init = env
     
     # Initialize POET
     poet = POET(

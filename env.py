@@ -108,7 +108,7 @@ class CarEnvironment(gym.Env):
         self.modify_env({"base_position":(40, 1), "size":(3, 2), "color":RED, "obstacle_type":'hole'})
         self.modify_env({"base_position":(60, 1), "size":(4, 3), "color":RED, "obstacle_type":'bump'})
 
-        return self._get_state()
+        return self._get_state(), {}
 
 
     def step(self, action):

@@ -13,6 +13,7 @@ class POET:
         
         self.E_init = E_init
         self.theta_init = theta_init
+        self.theta = theta_init
         self.alpha = alpha
         self.noise_std = noise_std
         self.T = T
@@ -70,11 +71,12 @@ class POET:
     def rank_by_novelty(self, child_list):
         e = self.envs + self.archive_envs
         child_novelty = []
+        theta = self.theta
 
         for E_child, theta_child in child_list:
             dist = []
             for E, theta in e:
-                score_diff = E_child.evaluate_agent(self.ddqn_agent, np.zeros_like(theta)) - E.evaluate_agent(self.ddqn_agent, np.zeros_like(theta))
+                score_diff = E_child.evaluate_agent(self.ddqn_agent, theta) - E.evaluate_agent(self.ddqn_agent, theta)
                 dist.append(abs(score_diff))
 
             novelty_score = np.mean(dist)

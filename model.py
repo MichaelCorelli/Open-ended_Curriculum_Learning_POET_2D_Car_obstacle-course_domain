@@ -108,7 +108,7 @@ class DDQN:
         self.lr = lr
         self.epsilon_initial = epsilon_initial
         self.batch_size = batch_size
-        self.threshold_r = threshold_r
+        self.reward_threshold = threshold_r
         
         self.network = Q(env, lr=self.lr).to(device)
         self.network_t = Q(env, lr=self.lr).to(device)
@@ -145,10 +145,9 @@ class DDQN:
 
     def step(self, mode = 'exploit'):
         a = self.env.action_space.sample() if mode == 'explore' else self.network.greedy_a(torch.FloatTensor(self.s_0).to(device))
-        s_1, reward, terminated, truncated, _ = self.env.step(a)
-        done = terminated or truncated
+        s_1, reward, done, info = self.env.step(a)
 
-        self.b.append(self.s_0, a, reward, terminated, s_1)
+        self.b.append(self.s_0, a, reward, done, s_1)
         self.rewards += reward
         self.s_0 = s_1.copy()
         self.step_c += 1
@@ -217,12 +216,12 @@ class DDQN:
         self.save()
         self.plot()
 
-    def evaluate(self, eval, ep_n):
+    def evaluate(self, eval, ep_n =1):
         rewards = 0
 
         for _ in range(ep_n):
             done = False
-            s, _ = eval.reset()
+            s, info = eval.reset()
             while not done:
                 a = self.network.greedy_a(torch.FloatTensor(s).to(device))
                 s1, r, terminated, truncated, _ = eval.step(a)
