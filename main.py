@@ -1,4 +1,3 @@
-#main.py
 import pygame
 from model import DDQN, Buffer
 from poet import POET, state_dict_to_vector

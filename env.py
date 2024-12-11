@@ -1,4 +1,3 @@
-#env.py
 import pygame
 import random
 import numpy as np
