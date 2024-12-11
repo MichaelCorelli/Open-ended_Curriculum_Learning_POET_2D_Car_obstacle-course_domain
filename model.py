@@ -2,13 +2,12 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import namedtuple, deque
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-#Actor-Critic framework
 
 class PolicyNetwork(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
@@ -16,17 +15,22 @@ class PolicyNetwork(nn.Module):
         self.model = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
-            nn.LeakyReLU(0.01),
+            nn.ReLU(),
             nn.Dropout(0.2),
             
             nn.Linear(hidden_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
-            nn.LeakyReLU(0.01),
+            nn.ReLU(),
             nn.Dropout(0.2),
             
             nn.Linear(hidden_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
-            nn.LeakyReLU(0.01),
+            nn.ReLU(),
+            
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.1),
             
             nn.Linear(hidden_dim, output_dim),
             nn.Tanh()
@@ -97,6 +101,8 @@ class Q(nn.Module):
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=self.lr)
 
     def greedy_a(self, state):
+        if state.dim() == 1:
+            state = state.unsqueeze(0)
         q_v = self.network(state)
         action = q_v.cpu().detach().numpy()[0]
         return action
@@ -107,6 +113,7 @@ class DDQN:
         self.b = b
         self.lr = lr
         self.epsilon_initial = epsilon_initial
+        self.epsilon = self.epsilon_initial
         self.batch_size = batch_size
         self.reward_threshold = threshold_r
         
@@ -133,14 +140,14 @@ class DDQN:
     def compute_loss(self, batch):
         s, a, rewards, done, next_s = batch
         s, a, rewards, done, next_s = map(lambda x: torch.tensor(x, device=device), [s, a, rewards, done, next_s])
+        a = a.long().unsqueeze(-1)
 
         q_v = self.network(s)
         q_v = torch.gather(q_v, 1, a)
         q_v_t_1 = self.network_t(next_s)
         q_v_t_1_max = torch.max(q_v_t_1, dim = -1)[0].reshape(-1, 1)
-        q_v_t = rewards + (1-done)*self.gamma*q_v_t_1_max
+        q_v_t = rewards + (1-done) * self.gamma * q_v_t_1_max
         loss = self.loss(q_v, q_v_t)
-
         return loss
 
     def step(self, mode = 'exploit'):
@@ -172,70 +179,120 @@ class DDQN:
         e = 0
         train = True
         
-        while train:
-            self.s_0, _ = self.env.reset()
-            self.rewards = 0
-            done = False
+        with tqdm(total=self.e_max, desc="Training Progress") as pbar:
+            while train:
+                self.s_0, _ = self.env.reset()
+                self.rewards = 0
+                done = False
 
-            while not done:
-                if ((e % 10) == 0):
-                    self.env.render()
+                while not done:
+                    if ((e % 10) == 0):
+                        self.env.render()
 
-                p = np.random.random()
-                mode = 'explore' if p < self.epsilon else 'exploit'
-                done = self.step(mode)
+                    p = np.random.random()
+                    mode = 'explore' if p < self.epsilon else 'exploit'
+                    done = self.step(mode)
 
-                if self.step_c % frequency_update == 0:
-                    self.update()
-                if self.step_c % frequency_sync == 0:
-                    self.network_t.load_state_dict(self.network.state_dict())
-                    self.sync_eps.append(e)
+                    if self.step_c % frequency_update == 0:
+                        self.update()
+                    if self.step_c % frequency_sync == 0:
+                        self.network_t.load_state_dict(self.network.state_dict())
+                        self.sync_eps.append(e)
 
-                if done:
-                    if self.epsilon >= 0.03:
-                        self.epsilon *= 0.5
-                    e += 1
-                    reward_limit = 2000
-                    self.train_rewards.append(min(self.rewards, reward_limit))
-                    
-                    avg_loss = np.mean(self.update_loss) if self.update_loss else 0
-                    self.train_loss.append(avg_loss)
-                    self.update_loss = []
-                    
-                    mean_rewards = np.mean(self.train_rewards[-self.window:])
-                    mean_loss = np.mean(self.train_loss[-self.window:])
-                    self.train_mean_rewards.append(mean_rewards)
+                    if done:
+                        if self.epsilon >= 0.03:
+                            self.epsilon *= 0.5
+                        e += 1
+                        reward_limit = 2000
+                        self.train_rewards.append(min(self.rewards, reward_limit))
+                        
+                        avg_loss = np.mean(self.update_loss) if self.update_loss else 0
+                        self.train_loss.append(avg_loss)
+                        self.update_loss = []
+                        
+                        mean_rewards = np.mean(self.train_rewards[-self.window:])
+                        mean_loss = np.mean(self.train_loss[-self.window:])
+                        self.train_mean_rewards.append(mean_rewards)
+                        pbar.update(1)
 
-                    if e >= e_max:
-                        train = False
-                        break
+                        if e >= e_max:
+                            train = False
+                            break
 
-                    if mean_rewards >= self.reward_threshold:
-                        train = False
+                        if mean_rewards >= self.reward_threshold:
+                            train = False
 
         self.save()
         self.plot()
 
-    def evaluate(self, eval, ep_n =1):
-        rewards = 0
+    def evaluate(self, eval_env, ep_n=1, render=False, verbose=True):
+        episode_rewards = []
+        episode_steps = []
+        final_positions = [] 
+        self.network.eval() 
 
-        for _ in range(ep_n):
+        for e_i in range(ep_n):
+            s, info = eval_env.reset()
             done = False
-            s, info = eval.reset()
-            while not done:
-                a = self.network.greedy_a(torch.FloatTensor(s).to(device))
-                s1, r, terminated, truncated, _ = eval.step(a)
-                done = terminated or truncated
-                rewards += r
-                s = s1
+            ep_reward = 0
+            steps = 0
 
-        return rewards / ep_n
+            while not done:
+                if render:
+                    eval_env.render()
+                a = self.network.greedy_a(torch.FloatTensor(s).unsqueeze(0).to(device))
+                s, r, done, info = eval_env.step(a)
+                ep_reward += r
+                steps += 1
+
+            episode_rewards.append(ep_reward)
+            episode_steps.append(steps)
+            
+            
+            if hasattr(eval_env, 'car') and hasattr(eval_env.car, 'body'):
+                final_positions.append(eval_env.car.body.position[0])  
+
+        
+        mean_reward = np.mean(episode_rewards)
+        std_reward = np.std(episode_rewards)
+        min_reward = np.min(episode_rewards)
+        max_reward = np.max(episode_rewards)
+
+        mean_steps = np.mean(episode_steps)
+        std_steps = np.std(episode_steps)
+
+        metrics = {
+            "mean_reward": mean_reward,
+            "std_reward": std_reward,
+            "min_reward": min_reward,
+            "max_reward": max_reward,
+            "mean_steps": mean_steps,
+            "std_steps": std_steps
+        }
+
+        if final_positions:
+            metrics["mean_final_position"] = np.mean(final_positions)
+            metrics["min_final_position"] = np.min(final_positions)
+            metrics["max_final_position"] = np.max(final_positions)
+
+        if verbose:
+            print("----- Evaluation Results -----")
+            print(f"Episodes: {ep_n}")
+            print(f"Mean Reward: {mean_reward:.2f}")
+            print(f"Std Reward: {std_reward:.2f}")
+            print(f"Min/Max Reward: {min_reward:.2f}/{max_reward:.2f}")
+            print(f"Mean Steps per Episode: {mean_steps:.2f} ± {std_steps:.2f}")
+            if final_positions:
+                print(f"Final Position (X) - Mean: {metrics['mean_final_position']:.2f}, Min: {metrics['min_final_position']:.2f}, Max: {metrics['max_final_position']:.2f}")
+            print("--------------------------------")
+
+        return metrics
 
     def save(self):
-        torch.save(self.network, "Q")
+        torch.save(self.network.state_dict(), "Q_state_dict.pth")
 
     def load(self):
-        self.network = torch.load("Q")
+        self.network.load_state_dict(torch.load("Q_state_dict.pth"))
         self.network.eval()
 
     def plot(self):

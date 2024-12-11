@@ -6,6 +6,7 @@ from Box2D.b2 import world, polygonShape, circleShape, revoluteJointDef
 from Box2D.b2 import rayCastCallback as b2RayCastCallback
 import gymnasium as gym
 from gymnasium import spaces
+from utils import vector_to_state_dict
 
 
 #Constants
@@ -299,6 +300,22 @@ class CarEnvironment(gym.Env):
         if self.done:
             reward -= 100
         return reward
+    
+    def mutate_environment(self):
+        new_obstacle_x = random.uniform(10, 50)  
+        new_obstacle_y = 1                      
+        obstacle_type = random.choice(["ramp", "hole", "bump"])  
+        width = random.uniform(2, 8)            
+        height = random.uniform(1, 5)  
+        
+        params = {
+            "base_position": (new_obstacle_x, new_obstacle_y),
+            "size": (width, height),
+            "color": RED,
+            "obstacle_type": obstacle_type
+        }
+        
+        self.modify_env(params)
 
     def _should_add_obstacle(self):
         if not self.obstacles:
@@ -327,10 +344,12 @@ class CarEnvironment(gym.Env):
         elif obstacle_type == "bump":
             size = (random.uniform(2, 4), random.uniform(0.5, 1.5))
 
-        self.modify_env(base_position=(new_obstacle_x, new_obstacle_y), 
-                        size=size, 
-                        color=RED, 
-                        obstacle_type=obstacle_type)
+        self.modify_env({
+            "base_position":(new_obstacle_x, new_obstacle_y),
+            "size": size,
+            "color": RED,
+            "obstacle_type": obstacle_type
+        })
         
     
     def evaluate_agent(self, ddqn_agent, theta):
@@ -354,8 +373,6 @@ class Car:
         self.wheel_rear = self._create_wheel((position[0] - 1.3, position[1] - 1))
         self.joint_front = self._create_wheel_joint(self.body, self.wheel_front, (1.4, -1))
         self.joint_rear = self._create_wheel_joint(self.body, self.wheel_rear, (-1.4, -1))
-        self._create_wheel_joint(self.body, self.wheel_front, (1.4, -1))
-        self._create_wheel_joint(self.body, self.wheel_rear, (-1.4, -1))
 
     def _create_wheel(self, position):
         radius = 0.5
@@ -391,7 +408,7 @@ class Car:
         return np.array(lidar_data)
     
     def apply_action(self, action):
-        motor_speed = action[0] * 50
-        self.wheel_front.joint.motorSpeed = motor_speed
-        self.wheel_rear.joint.motorSpeed = motor_speed
+        motor_speed = float(action[0] * 70)
+        self.joint_front.motorSpeed = motor_speed
+        self.joint_rear.motorSpeed = motor_speed
 

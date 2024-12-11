@@ -3,8 +3,12 @@ import numpy as np
 import random
 import pygame
 from env import CarEnvironment
+from utils import state_dict_to_vector, vector_to_state_dict
+from tqdm import tqdm
+
 
 RED = (255, 0, 0)
+
 
 class POET:
     def __init__(self, car, ddqn_agent, E_init, theta_init, alpha, noise_std, T, N_mutate, N_transfer, env_input_dim, hidden_dim, action_dim):
@@ -23,6 +27,9 @@ class POET:
         self.env_input_dim = env_input_dim
         self.hidden_dim = hidden_dim
         self.action_dim = action_dim
+        
+        # Store a reference state_dict for conversions
+        self.reference_state_dict = ddqn_agent.network.network.state_dict()
 
         #number of samples
         self.n = 20
@@ -42,11 +49,20 @@ class POET:
         self.archive_envs = []
         #max size for archive_envs
         self.archive_envs_max_size = 5
+        
+    def _evaluate_agent_with_vector(self, E, theta_vector):
+        # Convert vector to state_dict
+        print(f"Vector shape: {theta_vector.shape}")
+        total_params = sum(p.numel() for p in self.reference_state_dict.values())
+        print(f"Expected total params: {total_params}")
+        theta_sd = vector_to_state_dict(theta_vector, self.reference_state_dict)
+        return E.evaluate_agent(self.ddqn_agent, theta_sd)
 
     def eligible_to_reproduce(self, E, theta):
-        score = E.evaluate_agent(self.ddqn_agent, theta)
+        score = self._evaluate_agent_with_vector(E, theta)
         print(f"Score: {score}, Threshold: {self.threshold_el}")
-        return score >= self.threshold_el
+        mean_reward = score['mean_reward']
+        return mean_reward >= self.threshold_el
 
     def mc_satisfied(self, child_list):
         res = []
@@ -61,8 +77,9 @@ class POET:
                 continue
 
         for E_child, theta_child in child_list:
-            score = E_child.evaluate_agent(self.ddqn_agent, theta_child)
-            if self.threshold_c_min <= score <= self.threshold_c_max:
+            score = self._evaluate_agent_with_vector(E_child, theta_child)
+            mean_reward = score['mean_reward']  # Estrai il valore numerico
+            if self.threshold_c_min <= mean_reward <= self.threshold_c_max:
                 res.append((E_child, theta_child))
 
         print(f"Result in mc_satisfied: {res}")
@@ -71,15 +88,16 @@ class POET:
     def rank_by_novelty(self, child_list):
         e = self.envs + self.archive_envs
         child_novelty = []
-        theta = self.theta
+        # theta is no longer needed here separately since we evaluate each child's novelty
+        # based on previously stored environments. They all have vectors now.
 
         for E_child, theta_child in child_list:
             dist = []
             for E, theta in e:
-                score_diff = E_child.evaluate_agent(self.ddqn_agent, theta) - E.evaluate_agent(self.ddqn_agent, theta)
+                score_diff = self._evaluate_agent_with_vector(E_child, theta_child) - self._evaluate_agent_with_vector(E, theta)
                 dist.append(abs(score_diff))
 
-            novelty_score = np.mean(dist)
+            novelty_score = np.mean(dist) if dist else 0.0
             print(f"{theta_child} novelty score: {novelty_score}")
             child_novelty.append((E_child, theta_child, novelty_score))
 
@@ -104,11 +122,12 @@ class POET:
                 
                 E_child = E_parent.clone()  
                 E_child.mutate_environment() 
-
-                score = E_child.evaluate_agent(self.ddqn_agent, theta_parent)
+                
+                theta_parent_sd = vector_to_state_dict(theta_parent, self.reference_state_dict)
+                score = E_child.evaluate_agent(self.ddqn_agent, theta_parent_sd)
                 print(f"{theta_parent} score: {score} in new environment")
 
-                theta_child = np.copy(theta_parent)
+                theta_child = np.copy(theta_parent).flatten()
                 child_tuple = (E_child, theta_child)
 
                 if not isinstance(child_tuple, tuple) or len(child_tuple) != 2:
@@ -200,28 +219,32 @@ class POET:
 
     #evaluate_candidiates con ddqn_agent
     def evaluate_candidates(self, theta_list, E, alpha, noise_std):
-        theta_m_t = np.mean(theta_list, axis = 0)
+        # theta_list is a list of vectors
+        theta_m_t = np.mean(theta_list, axis=0)
 
-        epsilon = np.random.randn(self.n, *theta_m_t.shape)
+        epsilon = np.random.randn(self.n, theta_m_t.shape[0])
         E_i = []
 
+        # ES step approximation
         for epsilon_i in epsilon:
             theta_variation = theta_m_t + noise_std * epsilon_i
-            self.ddqn_agent.network.network.load_state_dict(theta_variation)
-            self.ddqn_agent.train(e_max = 3)
-            performance = E.evaluate_agent(self.ddqn_agent, theta_variation)
+            # Convert to state_dict to load
+            theta_variation_sd = vector_to_state_dict(theta_variation, self.reference_state_dict)
+            self.ddqn_agent.network.network.load_state_dict(theta_variation_sd)
+            performance = E.evaluate_agent(self.ddqn_agent, theta_variation_sd)
             E_i.append(performance)
 
         E_i = np.array(E_i)
-        gradient_estimation = np.sum(E_i[:, np.newaxis] * epsilon, axis = 0)
+        gradient_estimation = np.sum(E_i[:, np.newaxis] * epsilon, axis=0)
         theta_updated = theta_m_t + alpha * (1 / (self.n * noise_std)) * gradient_estimation
 
+        # Now we have candidate set C: original theta_list plus theta_updated
         C = theta_list + [theta_updated]
         performances = []
         for theta in C:
-            self.ddqn_agent.network.network.load_state_dict(theta)
-            self.ddqn_agent.train(e_max = 3)
-            performances.append(E.evaluate_agent(self.ddqn_agent, theta))
+            theta_sd = vector_to_state_dict(theta, self.reference_state_dict)
+            self.ddqn_agent.network.network.load_state_dict(theta_sd)
+            performances.append(E.evaluate_agent(self.ddqn_agent, theta_sd))
 
         i_best = np.argmax(performances)
         best_theta = C[i_best]
@@ -252,37 +275,44 @@ class POET:
             }
 
             E.modify_env(modified_env_params)
-            reward = E.evaluate_agent(self.ddqn_agent)
+            # Evaluate agent in the updated environment with current ddqn weights (no theta provided means internal agent weights)
+            reward = E.evaluate_agent(self.ddqn_agent, None)
             print(f"Reward: {reward}")
 
     def main_loop(self):
         EA_list = [(self.E_init, self.theta_init)]
 
-        for t in range(self.T):
-            if t >= 0 and t % self.N_mutate == 0:
-                EA_list = self.mutate_envs(EA_list)
+        with tqdm(total=self.T, desc="POET Main Loop Progress") as pbar:
+            for t in range(self.T):
+                if t >= 0 and t % self.N_mutate == 0:
+                    EA_list = self.mutate_envs(EA_list)
 
-            self.update_environments(t)
+                self.update_environments(t)
 
-            M = len(EA_list)
-            for m in range(M):
-                E_m, theta_m_t = EA_list[m]
+                M = len(EA_list)
+                for m in range(M):
+                    E_m, theta_m_t = EA_list[m]
 
-                self.ddqn_agent.env = E_m
+                    self.ddqn_agent.env = E_m
+                    print(f"Training agent on env: {m}")
+                    self.ddqn_agent.train(e_max=10, gamma=0.99, frequency_update=10, frequency_sync=100)
+                            
+                    #theta_m_t_1 = theta_m_t + self.es_step(theta_m_t, E_m, self.alpha, self.noise_std)
+                    # After training, get the updated theta from agent (state_dict)
+                    updated_sd = self.ddqn_agent.network.network.state_dict()
+                    updated_vec = state_dict_to_vector(updated_sd)
+                    theta_m_t_1 = updated_vec
 
-                print(f"Training agent on env: {m}")
-                self.ddqn_agent.train(e_max = 10, gamma = 0.99, frequency_update = 10, frequency_sync = 100)
+                    if M > 1 and t % self.N_transfer == 0:
+                        theta_b_a_m = [theta for j, (_, theta) in enumerate(EA_list) if j != m]
+                        theta_top = self.evaluate_candidates(theta_b_a_m, E_m, self.alpha, self.noise_std)
+                        # Compare performance of theta_top and theta_m_t_1
+                        top_score = self._evaluate_agent_with_vector(E_m, theta_top)
+                        current_score = self._evaluate_agent_with_vector(E_m, theta_m_t_1)
+                        print(f"theta_top score: {top_score}, current score: {current_score}")
+                        if top_score > current_score:
+                            theta_m_t_1 = theta_top
 
-                #theta_m_t_1 = theta_m_t + self.es_step(theta_m_t, E_m, self.alpha, self.noise_std)
-                theta_m_t_1 = self.ddqn_agent.network.network.state_dict()
-
-                if M > 1 and t % self.N_transfer == 0:
-                    theta_b_a_m = [theta for j, (_, theta) in enumerate(EA_list) if j != m]
-                    theta_top = self.evaluate_candidates(theta_b_a_m, E_m, self.alpha, self.noise_std)
-                    print(f"theta_top: {theta_top}")
-                    if E_m.evaluate_agent(self.ddqn_agent, theta_top) > E_m.evaluate_agent(self.ddqn_agent, theta_m_t_1):
-                        theta_m_t_1 = theta_top
-
-                EA_list[m] = (E_m, theta_m_t_1)
-
-            pygame.display.update()
+                    EA_list[m] = (E_m, theta_m_t_1)
+                pbar.update(1)
+                pygame.display.update()
