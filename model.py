@@ -81,6 +81,7 @@ class Q(nn.Module):
     def greedy_a(self, state):
         if state.dim() == 1:
             state = state.unsqueeze(0)
+        state = state.to(dtype = torch.float32)
         q_v = self.network(state)
         action = q_v.cpu().detach().numpy()[0]
         return action
@@ -117,12 +118,12 @@ class DDQN:
 
     def compute_loss(self, batch):
         s, a, rewards, done, next_s = batch
-        s, a, rewards, done, next_s = map(lambda x: torch.tensor(x, device=device), [s, a, rewards, done, next_s])
-        a = a.long().unsqueeze(-1)
+        s, a, rewards, done, next_s = map(lambda x: torch.tensor(x, device=device, dtype = torch.float32), [s, a, rewards, done, next_s])
+        a = a[:, 0].long().unsqueeze(-1)
 
-        q_v = self.network(s)
+        q_v = self.network.network(s)
         q_v = torch.gather(q_v, 1, a)
-        q_v_t_1 = self.network_t(next_s)
+        q_v_t_1 = self.network_t.network(next_s)
         q_v_t_1_max = torch.max(q_v_t_1, dim = -1)[0].reshape(-1, 1)
         q_v_t = rewards + (1-done) * self.gamma * q_v_t_1_max
         loss = self.loss(q_v, q_v_t)
