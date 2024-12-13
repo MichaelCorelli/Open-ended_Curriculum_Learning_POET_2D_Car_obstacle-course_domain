@@ -11,7 +11,6 @@ class POET:
     def __init__(self, car, ddqn_agent, E_init, theta_init, alpha, noise_std, T, N_mutate, N_transfer, env_input_dim, hidden_dim, action_dim):
         self.car = car
         self.ddqn_agent = ddqn_agent
-        
         self.E_init = E_init
         self.theta_init = theta_init
         self.theta = theta_init
@@ -20,33 +19,21 @@ class POET:
         self.T = T
         self.N_mutate = N_mutate
         self.N_transfer = N_transfer
-        
         self.env_input_dim = env_input_dim
         self.hidden_dim = hidden_dim
         self.action_dim = action_dim
-        
-        # Store a reference state_dict for conversions
         self.reference_state_dict = ddqn_agent.network.network.state_dict()
 
-        #number of samples
         self.n = 20
-        #max number of children per reproduction
         self.max_children = 3
-        #max number of children admitted per reproduction
         self.max_admitted = 3
-        #max number of active environments
         self.capacity = 5
-        #eligibility threshold
         self.threshold_el = 0.3
-        #minimal criterion threshold
         self.threshold_c_min = 0.2
         self.threshold_c_max = 0.9
-        #environment for novelty
         self.envs = []
         self.archive_envs = []
-        #max size for archive_envs
         self.archive_envs_max_size = 5
-        #reward history dictionary for every (E, agent)
         self.r_history = {}
 
     def update_threshold_c(self, r_history, window_size = 5, range = 0.1):

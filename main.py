@@ -51,7 +51,6 @@ def main():
     metrics = agent.evaluate(env, ep_n=15, render=False, verbose=True)
     print(metrics)
     
-    # Seleziona ambienti da visualizzare: iniziale + 10 casuali
     all_envs = poet.envs + poet.archive_envs
     number_of_random_envs = 10
     sampled_envs = random.sample(all_envs, min(number_of_random_envs, len(all_envs)))
@@ -77,7 +76,6 @@ def main():
         pygame.display.flip()
         display_envs[current_idx].render()  
 
-    #Close the environment when done
     env.close()
     pygame.quit()
     

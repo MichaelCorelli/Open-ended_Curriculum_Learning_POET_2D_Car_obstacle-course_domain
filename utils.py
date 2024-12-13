@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 
-#Extract all parameters and flatten into one NumPy array
 def state_dict_to_vector(state_dict):
     params = []
     for key, value in state_dict.items():
@@ -14,7 +13,7 @@ def state_dict_to_vector(state_dict):
 
 def vector_to_state_dict(vector, reference_state_dict):
     vector = np.asarray(vector).flatten()  
-   # print(f"Vector shape after flatten: {vector.shape}")  # Debug
+   #print(f"Vector shape after flatten: {vector.shape}")
     new_state_dict = {}
     idx = 0
 
@@ -22,7 +21,6 @@ def vector_to_state_dict(vector, reference_state_dict):
         length = value.numel()
         np_values = vector[idx:idx + length]
 
-        # Verifica della lunghezza
         if len(np_values) != length:
             raise ValueError(f"Vector slice length mismatch for key '{key}' (expected {length}, got {len(np_values)})")
 

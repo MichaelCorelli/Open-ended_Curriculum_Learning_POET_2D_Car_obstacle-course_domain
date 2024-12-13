@@ -74,7 +74,7 @@ class Q(nn.Module):
         super(Q, self).__init__()
         input_dim = env.observation_space.shape[0]
         hidden_dim = 128
-        output_dim = env.action_space.n  # Numero di azioni discrete
+        output_dim = env.action_space.n
         self.lr = lr
         
         self.network = PolicyNetwork(input_dim, hidden_dim, output_dim)
