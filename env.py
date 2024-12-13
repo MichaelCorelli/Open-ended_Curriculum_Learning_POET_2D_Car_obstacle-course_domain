@@ -5,18 +5,18 @@ from Box2D.b2 import world, polygonShape, circleShape, revoluteJointDef
 from Box2D.b2 import rayCastCallback as b2RayCastCallback
 import gymnasium as gym
 from gymnasium import spaces
-from utils import vector_to_state_dict
+from collections import deque
 
 
-#Constants
-PPM = 20.0  #pixels x meter
+# Constants
+PPM = 20.0  # pixels x meter
 FPS = 60
 STEP_T = 1.0 / FPS
 SCREEN_W, SCREEN_H = 800, 600
+GREEN = (0, 255, 0)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
-
 
 class RayCastCallback(b2RayCastCallback):
     def __init__(self):
@@ -29,14 +29,13 @@ class RayCastCallback(b2RayCastCallback):
         self.fraction = fraction
         return fraction
 
-
 class CarEnvironment(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self):
         super(CarEnvironment, self).__init__()
 
-        #Initialize Pygame and Box2D world
+        # Initialize Pygame and Box2D world
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
         pygame.display.set_caption("POET 2D Car Simulation")
@@ -44,16 +43,18 @@ class CarEnvironment(gym.Env):
         self.world = world(gravity=(0, -10), doSleep=True)
         self.bodies = []
         self.obstacles = []
+        self.step_count = 0
+        self.max_steps = 1000
+        self.passed_obstacles = set()
+        self.prev_positions = deque(maxlen=30)
         self.car = None
         self.camera = (0, 0)
 
-        #Define action and observation space
-        self.action_space = spaces.Box(low=np.array([-1.0, -1.0]),
-                                       high=np.array([1.0, 1.0]),
-                                       dtype=np.float32)
+        # Define action and observation space
+        self.action_space = spaces.Discrete(9)  # 9 azioni
         self.observation_space = spaces.Box(low=-np.inf,
                                             high=np.inf,
-                                            shape=(4,),
+                                            shape=(4 + 5,),  # 4 + lidar_sensors=5
                                             dtype=np.float32)
         
         # Load textures
@@ -61,67 +62,73 @@ class CarEnvironment(gym.Env):
         self.background_texture = pygame.image.load("textures/background.png").convert()
         self.background_texture = pygame.transform.scale(self.background_texture, (SCREEN_W, SCREEN_H))
 
-        # Car body texture
-        self.car_body_texture = pygame.image.load("textures/car_body.png").convert_alpha()
-        self.car_body_texture = pygame.transform.scale(
-            self.car_body_texture,
-            (int(3.5 * PPM), int(1.4 * PPM))
-        )
-
-        # Ground/terrain texture
-        self.ground_texture = pygame.image.load("textures/terrain.png").convert_alpha()
-        self.ground_texture = pygame.transform.scale(self.ground_texture, (int(100 * PPM), int(2 * PPM)))
-
         # Wheel texture
-        self.wheel_texture = pygame.image.load("textures/wheel.png").convert_alpha()
-        self.wheel_texture = pygame.transform.scale(self.wheel_texture, (int(0.7 * PPM), int(0.7 * PPM)))
+        try:
+            self.wheel_texture = pygame.image.load("textures/wheel.png").convert_alpha()
+            # Assicurati che il raggio delle ruote corrisponda alle dimensioni fisiche
+            wheel_radius = 0.5  # Deve corrispondere a quello definito nella classe Car
+            self.wheel_texture = pygame.transform.scale(self.wheel_texture, (int(wheel_radius * 2 * PPM), int(wheel_radius * 2 * PPM)))
+        except pygame.error as e:
+            print(f"Errore nel caricamento di wheel.png: {e}")
+            # Crea un cerchio grigio come fallback
+            wheel_radius = 0.5
+            self.wheel_texture = pygame.Surface((int(wheel_radius * 2 * PPM), int(wheel_radius * 2 * PPM)), pygame.SRCALPHA)
+            pygame.draw.circle(self.wheel_texture, (100, 100, 100), (int(wheel_radius * PPM), int(wheel_radius * PPM)), int(wheel_radius * PPM))
         
-        
-        lidar_sensors = 5
-        self.observation_space = spaces.Box(
-            low=-np.inf,
-            high=np.inf,
-            shape=(4 + lidar_sensors,),  
-            dtype=np.float32
-        )
+        # Definisci mappatura azioni discrete
+        self.actions = [
+            (-1, -1),  # 0: Steer left, reverse
+            (-1, 0),   # 1: Steer left, no acceleration
+            (-1, 1),   # 2: Steer left, forward
+            (0, -1),   # 3: No steering, reverse
+            (0, 0),    # 4: No steering, no acceleration
+            (0, 1),    # 5: No steering, forward
+            (1, -1),   # 6: Steer right, reverse
+            (1, 0),    # 7: Steer right, no acceleration
+            (1, 1)     # 8: Steer right, forward
+        ]
 
         self.done = False
         self.reset()
 
     def reset(self):
-        #Reset the simulation environment
+        # Reset the simulation environment
         self.world = world(gravity=(0, -10), doSleep=True)
         self.bodies = []
         self.obstacles = []
-        self.car = Car(self.world, position=(10, 4))
+        self.passed_obstacles = set()
+        self.prev_positions = deque(maxlen=30)
+        self.car = Car(self.world, position=(10, 2.2))
         self.add_body(self.car.body, BLACK)
         self.add_body(self.car.wheel_front, BLACK)
         self.add_body(self.car.wheel_rear, BLACK)
         ground = self.world.CreateStaticBody(position=(50, 0),
                                              shapes=polygonShape(box=(50, 1)))
-        self.add_body(ground, BLACK)
+        self.add_body(ground, GREEN)
         self.camera = (0, 0)
         self.done = False
+        self.step_count = 0  # Reimposta step_count
 
-        #Initialize obstacles
-        self.modify_env({"base_position":(20, 1), "size":(2, 2), "color": RED, "obstacle_type":'ramp'})
-        self.modify_env({"base_position":(40, 1), "size":(3, 2), "color":RED, "obstacle_type":'hole'})
-        self.modify_env({"base_position":(60, 1), "size":(4, 3), "color":RED, "obstacle_type":'bump'})
+        # Initialize obstacles
+        self.modify_env({"base_position":(20, 1), "size":(1, 0.7), "color": BLACK, "obstacle_type":'ramp'})
+        self.modify_env({"base_position":(40, 1), "size":(0.7, 1), "color":BLACK, "obstacle_type":'hole'})
+        self.modify_env({"base_position":(60, 1), "size":(2, 1), "color":BLACK, "obstacle_type":'bump'})
 
         return self._get_state(), {}
 
-
     def step(self, action):
-        #Apply action to the car
-        self.car.apply_action(action)
+        # Apply discrete action
+        steering, acceleration = self.actions[action]
+        self.apply_discrete_action(steering, acceleration)
+        self.step_count += 1
 
-        #Step the physics simulation
+        # Step the physics simulation
         self.world.Step(STEP_T, 6, 2)
         self.world.ClearForces()
 
         self._update_camera()
-
-        #Check for termination conditions
+        self.prev_positions.append(self.car.body.position.copy())
+        # Check for termination conditions
         self.done = self._check_done()
 
         reward = self._calculate_reward()
@@ -130,17 +137,27 @@ class CarEnvironment(gym.Env):
 
         if self._should_add_obstacle():
             self._add_new_obstacle()
+        
+        if self.step_count > self.max_steps:
+            self.done = True
 
         return state, reward, self.done, {}
 
+    def apply_discrete_action(self, steering, acceleration):
+        motor_speed = float(acceleration * 90)
+        steering_speed = 10.0  # Adjust as needed
+        self.car.joint_front.motorSpeed = motor_speed + steering * steering_speed
+        self.car.joint_rear.motorSpeed = motor_speed - steering * steering_speed
 
     def render(self, mode='human'):
-        #Draw background
+        # Draw background
         self.screen.blit(self.background_texture, (0,0))
-        #Draw ground
-        ground_x = 50 * PPM - self.camera[0] - self.ground_texture.get_width() / 2
-        ground_y = SCREEN_H - (1 * PPM) - self.camera[1]
-        self.screen.blit(self.ground_texture, (ground_x, ground_y))
+        # Disegna il terreno verde
+        ground_rect = pygame.Rect(0 - self.camera[0],
+                              SCREEN_H - (1 * PPM) - self.camera[1],
+                              SCREEN_W,
+                              20)  # Altezza del terreno
+        pygame.draw.rect(self.screen, GREEN, ground_rect)
         
         for body, color in self.bodies:
             for fixture in body.fixtures:
@@ -155,28 +172,35 @@ class CarEnvironment(gym.Env):
                     wheel_pos = body.position
                     wheel_angle = body.angle
                     rotated_wheel = pygame.transform.rotate(self.wheel_texture, -wheel_angle * 180 / np.pi)
-                    wheel_x = wheel_pos[0]*PPM - self.camera[0] - rotated_wheel.get_width()/2
-                    wheel_y = SCREEN_H - (wheel_pos[1]*PPM) - self.camera[1] - rotated_wheel.get_height()/2
+                    wheel_x = wheel_pos[0] * PPM - self.camera[0] - rotated_wheel.get_width() / 2
+                    wheel_y = SCREEN_H - (wheel_pos[1] * PPM) - self.camera[1] - rotated_wheel.get_height() / 2
                     self.screen.blit(rotated_wheel, (wheel_x, wheel_y))
-
+                    
+            
         # Render holes as black rectangles
         for obs in self.obstacles:
             if obs['type'] == "hole":
                 x, y = obs['params']['base_position']
                 width = obs['params']['size'][0]
-                pygame.draw.rect(self.screen, BLACK,
-                                pygame.Rect(x * PPM - self.camera[0],
-                                            SCREEN_H - (y + 1) * PPM - self.camera[1],
-                                            width * PPM, 20))  # Adjust height visually for ground
+                hole_rect = pygame.Rect(x * PPM - self.camera[0],
+                                    SCREEN_H - (y + 1) * PPM - self.camera[1],
+                                    width * PPM,
+                                    0)  # Altezza della buca
+                pygame.draw.rect(self.screen, WHITE, hole_rect)  # Adjust height visually for ground
         
-        # Draw the car body using the custom texture
+        '''
         car_pos = self.car.body.position
         car_angle = self.car.body.angle
-        rotated_car_body = pygame.transform.rotate(self.car_body_texture, -car_angle * 180 / np.pi)
-        car_x = car_pos[0]*PPM - self.camera[0] - rotated_car_body.get_width()/2
-        car_y = SCREEN_H - (car_pos[1]*PPM) - self.camera[1] - rotated_car_body.get_height()/2
-        self.screen.blit(rotated_car_body, (car_x, car_y))
-
+        car_width = int(3.5 * PPM)
+        car_height = int(1.4 * PPM)
+        car_rect = pygame.Rect(0, 0, car_width, car_height)
+        car_rect.center = (int(car_pos[0] * PPM - self.camera[0]),
+                        int(SCREEN_H - car_pos[1] * PPM - self.camera[1]))
+        rotated_car = pygame.transform.rotate(pygame.Surface((car_width, car_height), pygame.SRCALPHA), -car_angle * 180 / np.pi)
+        rotated_car.fill((0, 0, 255, 255))  # Blu per la macchina
+        rotated_rect = rotated_car.get_rect(center=car_rect.center)
+        self.screen.blit(rotated_car, rotated_rect.topleft)
+        '''
         pygame.display.flip()
         self.clock.tick(FPS)
 
@@ -243,10 +267,9 @@ class CarEnvironment(gym.Env):
         # Optionally, copy other necessary state variables
         new_env.camera = self.camera
 
-        # Return the cloned environment
         return new_env
 
-
+    '''
     def evaluate_policy(self, theta):
         total_reward = 0
         state = self.reset()
@@ -263,11 +286,12 @@ class CarEnvironment(gym.Env):
         action = np.dot(theta, state)
         action = np.clip(action, self.action_space.low, self.action_space.high)
         return action
+    '''
 
     def _get_state(self):
         car_pos = self.car.body.position
         car_vel = self.car.body.linearVelocity
-        #Get LiDAR Data
+        # Get LiDAR Data
         lidar_data = self.car.get_lidar_data(num_sensors=5, max_distance=20, angle_range=(-np.pi/6, np.pi/6))
         return np.concatenate(([car_pos[0], car_pos[1], car_vel[0], car_vel[1]], lidar_data))
 
@@ -283,22 +307,66 @@ class CarEnvironment(gym.Env):
     def _check_done(self):
         car_x, car_y = self.car.body.position
         # Check if the car has fallen into a hole
-        for obs in self.obstacles:
+        for idx, obs in enumerate(self.obstacles):
             if obs['type'] == "hole":
                 base_pos = obs['params']['base_position']
                 size = obs['params']['size']
                 hole_x, hole_width = base_pos[0], size[0]
 
                 if hole_x <= car_x <= hole_x + hole_width and car_y < 1:
+                    self.done_reason = 'hole'
                     return True  # Car fell into the hole
 
+        self.done_reason = 'fell'
         return car_y < 0  # Existing condition for falling below the ground
 
     def _calculate_reward(self):
-        reward = self.car.body.position[0]
+        reward = 0
+
+        # Ricompensa per caduta
         if self.done:
-            reward -= 100
+            if hasattr(self, 'done_reason') and self.done_reason == 'hole':
+                reward += -20
+            else:
+                reward -= 40  # Penalità ridotta per cadere oltre il terreno
+
+        # Ricompensa per superare un ostacolo
+        for idx, obs in enumerate(self.obstacles):
+            base_x, base_y = obs['params']['base_position']
+            size_x, size_y = obs['params']['size']
+            if base_x + size_x < self.car.body.position[0] and idx not in self.passed_obstacles:
+                reward += 150  # Ricompensa leggermente ridotta
+                self.passed_obstacles.add(idx)
+
+        # Penalità per essere bloccato
+        if len(self.prev_positions) == self.prev_positions.maxlen:
+            positions = np.array([[pos[0], pos[1]] for pos in self.prev_positions])
+            movement = positions.max(axis=0) - positions.min(axis=0)
+            movement_threshold = 0.5  # Definisci una soglia adeguata
+            if np.all(movement < movement_threshold):
+                reward -= 20  # Penalità ridotta
+
+        # Ricompensa/Penalità per movimento avanti/indietro
+        if len(self.prev_positions) >= 2:
+            current_x = self.prev_positions[-1][0]
+            previous_x = self.prev_positions[-2][0]
+            delta_x = current_x - previous_x
+
+            # Definisci un fattore di scala per la ricompensa/penalità
+            reward_scale = 5  # Ridotto per bilanciare meglio
+
+            if delta_x > 0:
+                # L'auto si è mossa avanti
+                reward += delta_x * reward_scale
+                # Ricompensa per velocità
+                velocity_reward = self.car.body.linearVelocity[0] * 1.0  # Scala per la velocità
+                reward += velocity_reward
+            elif delta_x < 0:
+                # L'auto si è mossa indietro
+                reward += delta_x * reward_scale  # delta_x è negativo, quindi riduce la ricompensa
+
         return reward
+
     
     def mutate_environment(self):
         new_obstacle_x = random.uniform(10, 50)  
@@ -310,7 +378,7 @@ class CarEnvironment(gym.Env):
         params = {
             "base_position": (new_obstacle_x, new_obstacle_y),
             "size": (width, height),
-            "color": RED,
+            "color": BLACK,
             "obstacle_type": obstacle_type
         }
         
@@ -322,7 +390,7 @@ class CarEnvironment(gym.Env):
         last_obs = self.obstacles[-1]
         base_pos = last_obs['params']['base_position']
         size = last_obs['params']['size']
-        #Compute the end of the last obstacle
+        # Compute the end of the last obstacle
         last_pos_x = base_pos[0] + size[0]
         car_x = self.car.body.position[0]
         return car_x > last_pos_x - 20
@@ -346,20 +414,18 @@ class CarEnvironment(gym.Env):
         self.modify_env({
             "base_position":(new_obstacle_x, new_obstacle_y),
             "size": size,
-            "color": RED,
+            "color": BLACK,
             "obstacle_type": obstacle_type
         })
         
     
-    def evaluate_agent(self, ddqn_agent, theta):
+    def evaluate_agent(self, ddqn_agent, theta, verbose=True):
         if theta is not None:
             ddqn_agent.network.network.load_state_dict(theta)
-        return ddqn_agent.evaluate(self)
-
-
+        return ddqn_agent.evaluate(self, ep_n=1, render=False, verbose=verbose)
 
 class Car:
-    def __init__(self, world, position=(10, 4)):
+    def __init__(self, world, position=(10, 2.2)):
         self.world = world
         self._create_car(position)
 
@@ -367,26 +433,42 @@ class Car:
         car_width, car_height = 3.5, 1.4
         self.body = self.world.CreateDynamicBody(position=position)
         self.body.CreatePolygonFixture(box=(car_width / 2, car_height / 2),
-                                       density=1.2, friction=0.5)
-        self.wheel_front = self._create_wheel((position[0] + 1.3, position[1] - 1))
-        self.wheel_rear = self._create_wheel((position[0] - 1.3, position[1] - 1))
-        self.joint_front = self._create_wheel_joint(self.body, self.wheel_front, (1.4, -1))
-        self.joint_rear = self._create_wheel_joint(self.body, self.wheel_rear, (-1.4, -1))
+                                    density=2.5, friction=0.5)
+        
+        
+        # Parametri delle ruote
+        wheel_radius = 0.6  # Puoi regolare questo valore secondo necessità
+        wheel_distance = 1.2  # Distanza ridotta delle ruote
+        wheel_offset_y = - (car_height / 2 + wheel_radius)
+        
+        # Creazione delle ruote
+        wheel_front_pos = (position[0] + wheel_distance, position[1] + wheel_offset_y)
+        wheel_rear_pos = (position[0] - wheel_distance, position[1] + wheel_offset_y)
+        self.wheel_front = self._create_wheel(wheel_front_pos, wheel_radius)
+        self.wheel_rear = self._create_wheel(wheel_rear_pos, wheel_radius)
+        
+        # Creazione delle giunzioni (revolute joints) con ancoraggio corretto
+        self.joint_front = self._create_wheel_joint(self.body, self.wheel_front, wheel_front_pos)
+        self.joint_rear = self._create_wheel_joint(self.body, self.wheel_rear, wheel_rear_pos)
 
-    def _create_wheel(self, position):
-        radius = 0.5
+    def _create_wheel(self, position, radius=0.5):
         wheel = self.world.CreateDynamicBody(position=position)
-        wheel.CreateCircleFixture(radius=radius, density=1.0, friction=0.9)
+        wheel.CreateCircleFixture(radius=radius, density=1.5, friction=1.1)
         return wheel
 
-    def _create_wheel_joint(self, bodyA, bodyB, anchorA):
-        joint_def = revoluteJointDef(bodyA=bodyA, bodyB=bodyB,
-                                    localAnchorA=anchorA,
-                                    enableMotor=True, maxMotorTorque=1000)
+    def _create_wheel_joint(self, bodyA, bodyB, anchor):
+        joint_def = revoluteJointDef(
+            bodyA=bodyA,
+            bodyB=bodyB,
+            anchor=anchor,
+            enableMotor=True,
+            maxMotorTorque=900,
+            motorSpeed=0.9
+        )
         joint = self.world.CreateJoint(joint_def)
         return joint
     
-    #Scan LiDAR to get data from the environment
+    # Scan LiDAR to get data from the environment
     def get_lidar_data(self, num_sensors, max_distance, angle_range):
         start_angle, end_angle = angle_range
         angles = np.linspace(start_angle, end_angle, num_sensors)
@@ -406,8 +488,8 @@ class Car:
             lidar_data.append(distance)
         return np.array(lidar_data)
     
-    def apply_action(self, action):
-        motor_speed = float(action[0] * 70)
-        self.joint_front.motorSpeed = motor_speed
-        self.joint_rear.motorSpeed = motor_speed
-
+    def apply_action(self, steering, acceleration):
+        motor_speed = float(acceleration * 70)
+        steering_speed = 5.0  # Adjust as needed
+        self.joint_front.motorSpeed = motor_speed + steering * steering_speed
+        self.joint_rear.motorSpeed = motor_speed - steering * steering_speed

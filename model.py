@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import namedtuple, deque
 
-#controllare
+# Controllare
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class PolicyNetwork(nn.Module):
@@ -32,25 +32,22 @@ class PolicyNetwork(nn.Module):
             nn.ReLU(),
             nn.Dropout(0.1),
             
-            nn.Linear(hidden_dim, output_dim),
-            nn.Tanh()
+            nn.Linear(hidden_dim, output_dim) 
         )
 
     def forward(self, x):
         return self.model(x)
-    
-
 
 def tensor(tuple):
-    return torch.stack([torch.tensor(j, dtype = torch.float32, device = device) for j in tuple])
+    return torch.stack([torch.tensor(j, dtype=torch.float32, device=device) for j in tuple])
 
 class Buffer:
 
-    def __init__(self, size = 20000, burn_in = 5000):
+    def __init__(self, size=20000, burn_in=5000):
         self.size = size
         self.burn_in = burn_in
-        self.buffer = namedtuple('buffer', field_names = ['state', 'action', 'reward', 'done', 'next_state'])
-        self.replay = deque(maxlen = size)
+        self.buffer = namedtuple('buffer', field_names=['state', 'action', 'reward', 'done', 'next_state'])
+        self.replay = deque(maxlen=size)
 
     def capacity(self):
         return len(self.replay) / self.size
@@ -65,6 +62,11 @@ class Buffer:
         indices = torch.randint(0, len(self.replay), (batch_size,))
         batch = [self.replay[i] for i in indices]
         s, a, r, d, ns = zip(*batch)
+        s = np.array(s)
+        a = np.array(a)
+        r = np.array(r)
+        d = np.array(d)
+        ns = np.array(ns)
         return s, a, r, d, ns
 
 class Q(nn.Module):
@@ -72,22 +74,31 @@ class Q(nn.Module):
         super(Q, self).__init__()
         input_dim = env.observation_space.shape[0]
         hidden_dim = 128
-        output_dim = env.action_space.shape[0] 
+        output_dim = env.action_space.n  # Numero di azioni discrete
         self.lr = lr
         
         self.network = PolicyNetwork(input_dim, hidden_dim, output_dim)
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=self.lr)
+    
+    def forward(self, x):
+        return self.network(x)
 
     def greedy_a(self, state):
-        if state.dim() == 1:
-            state = state.unsqueeze(0)
-        state = state.to(dtype = torch.float32)
-        q_v = self.network(state)
-        action = q_v.cpu().detach().numpy()[0]
-        return action
+        self.network.eval()
+        with torch.no_grad():
+            if state.dim() == 1:
+                state = state.unsqueeze(0)
+            state = state.to(dtype=torch.float32)
+            q_v = self.forward(state)
+            action = torch.argmax(q_v, dim=1).cpu().numpy()
+        
+        self.network.train()
+    
+        return action[0]
+
 
 class DDQN:
-    def __init__(self, env, b, lr, epsilon_initial, batch_size, threshold_r):
+    def __init__(self, env, b, lr, epsilon_initial, batch_size, threshold_r, render_during_training=False):
         self.env = env
         self.b = b
         self.lr = lr
@@ -107,10 +118,12 @@ class DDQN:
         self.update_loss = []
         self.train_mean_rewards = []
         self.window = 100
+        self.render_during_training = render_during_training
 
     def update(self):
+        self.network.network.train()
         self.network.optimizer.zero_grad()
-        batch = self.b.batch(batch_size = self.batch_size)
+        batch = self.b.batch(batch_size=self.batch_size)
         loss = self.compute_loss(batch)
         loss.backward()
         self.network.optimizer.step()
@@ -118,19 +131,25 @@ class DDQN:
 
     def compute_loss(self, batch):
         s, a, rewards, done, next_s = batch
-        s, a, rewards, done, next_s = map(lambda x: torch.tensor(x, device=device, dtype = torch.float32), [s, a, rewards, done, next_s])
-        a = a[:, 0].long().unsqueeze(-1)
+        s = torch.from_numpy(s).to(device, dtype=torch.float32)
+        a = torch.from_numpy(a).to(device, dtype=torch.long).unsqueeze(-1) 
+        rewards = torch.from_numpy(rewards).to(device, dtype=torch.float32).unsqueeze(-1)
+        done = torch.from_numpy(done).to(device, dtype=torch.float32).unsqueeze(-1)
+        next_s = torch.from_numpy(next_s).to(device, dtype=torch.float32)
 
         q_v = self.network.network(s)
         q_v = torch.gather(q_v, 1, a)
         q_v_t_1 = self.network_t.network(next_s)
-        q_v_t_1_max = torch.max(q_v_t_1, dim = -1)[0].reshape(-1, 1)
-        q_v_t = rewards + (1-done) * self.gamma * q_v_t_1_max
+        q_v_t_1_max = torch.max(q_v_t_1, dim=1, keepdim=True)[0]
+        q_v_t = rewards + (1 - done) * self.gamma * q_v_t_1_max
         loss = self.loss(q_v, q_v_t)
         return loss
 
-    def step(self, mode = 'exploit'):
-        a = self.env.action_space.sample() if mode == 'explore' else self.network.greedy_a(torch.FloatTensor(self.s_0).to(device))
+    def step(self, mode='exploit'):
+        if mode == 'explore':
+            a = self.env.action_space.sample()
+        else:
+            a = self.network.greedy_a(torch.FloatTensor(self.s_0).to(device))
         s_1, reward, done, info = self.env.step(a)
 
         self.b.append(self.s_0, a, reward, done, s_1)
@@ -153,7 +172,7 @@ class DDQN:
         self.s_0, _ = self.env.reset()
 
         while self.b.burn_in_capacity() < 1:
-            self.step(mode = 'explore')
+            self.step(mode='explore')
 
         e = 0
         train = True
@@ -175,7 +194,7 @@ class DDQN:
                     if self.step_c % frequency_update == 0:
                         self.update()
                     if self.step_c % frequency_sync == 0:
-                        self.network_t.load_state_dict(self.network.state_dict())
+                        self.network_t.network.load_state_dict(self.network.network.state_dict())
                         self.sync_eps.append(e)
 
                     if done:
@@ -205,33 +224,33 @@ class DDQN:
         self.plot()
 
     def evaluate(self, eval_env, ep_n=1, render=False, verbose=True):
+        self.network.network.eval()
         episode_rewards = []
         episode_steps = []
-        final_positions = [] 
-        self.network.eval() 
-
-        for e_i in range(ep_n):
-            s, info = eval_env.reset()
-            done = False
-            ep_reward = 0
-            steps = 0
-
-            while not done:
-                if render:
-                    eval_env.render()
-                a = self.network.greedy_a(torch.FloatTensor(s).unsqueeze(0).to(device))
-                s, r, done, info = eval_env.step(a)
-                ep_reward += r
-                steps += 1
-
-            episode_rewards.append(ep_reward)
-            episode_steps.append(steps)
-            
-            
-            if hasattr(eval_env, 'car') and hasattr(eval_env.car, 'body'):
-                final_positions.append(eval_env.car.body.position[0])  
-
+        final_positions = []
+        max_steps_eval = 100
         
+        with torch.no_grad():
+            for e_i in range(ep_n):
+                s, info = eval_env.reset()
+                done = False
+                ep_reward = 0
+                steps = 0
+
+                while not done and steps < max_steps_eval:
+                    if render:
+                        eval_env.render()
+                    a = self.network.greedy_a(torch.FloatTensor(s).unsqueeze(0).to(device))
+                    s, r, done, info = eval_env.step(a)
+                    ep_reward += r
+                    steps += 1
+
+                episode_rewards.append(ep_reward)
+                episode_steps.append(steps)
+                
+                if hasattr(eval_env, 'car') and hasattr(eval_env.car, 'body'):
+                    final_positions.append(eval_env.car.body.position[0])  
+
         mean_reward = np.mean(episode_rewards)
         std_reward = np.std(episode_rewards)
         min_reward = np.min(episode_rewards)

@@ -6,7 +6,7 @@ from utils import state_dict_to_vector, vector_to_state_dict
 from tqdm import tqdm
 
 
-RED = (255, 0, 0)
+BLACK = (0, 0, 0)
 
 
 class POET:
@@ -55,7 +55,7 @@ class POET:
         total_params = sum(p.numel() for p in self.reference_state_dict.values())
         print(f"Expected total params: {total_params}")
         theta_sd = vector_to_state_dict(theta_vector, self.reference_state_dict)
-        return E.evaluate_agent(self.ddqn_agent, theta_sd)
+        return E.evaluate_agent(self.ddqn_agent, theta_sd, verbose=False)
 
     def eligible_to_reproduce(self, E, theta):
         score = self._evaluate_agent_with_vector(E, theta)
@@ -87,8 +87,6 @@ class POET:
     def rank_by_novelty(self, child_list):
         e = self.envs + self.archive_envs
         child_novelty = []
-        # theta is no longer needed here separately since we evaluate each child's novelty
-        # based on previously stored environments. They all have vectors now.
 
         for E_child, theta_child in child_list:
             dist = []
@@ -269,7 +267,7 @@ class POET:
             modified_env_params = {
                 "base_position": (random.uniform(10, 50), 1),
                 "size": (width, height),
-                "color": RED,
+                "color": BLACK,
                 "obstacle_type": obstacle_type
             }
 
@@ -294,7 +292,7 @@ class POET:
 
                     self.ddqn_agent.env = E_m
                     print(f"Training agent on env: {m}")
-                    self.ddqn_agent.train(e_max=10, gamma=0.99, frequency_update=10, frequency_sync=100)
+                    self.ddqn_agent.train(e_max=100, gamma=0.99, frequency_update=10, frequency_sync=100)
                             
                     #theta_m_t_1 = theta_m_t + self.es_step(theta_m_t, E_m, self.alpha, self.noise_std)
                     # After training, get the updated theta from agent (state_dict)

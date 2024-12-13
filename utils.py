@@ -5,16 +5,16 @@ import torch
 def state_dict_to_vector(state_dict):
     params = []
     for key, value in state_dict.items():
-        print(f"Processing key: {key}, shape: {value.shape}, numel: {value.numel()}")
+        #print(f"Processing key: {key}, shape: {value.shape}, numel: {value.numel()}")
         np_value = value.detach().cpu().numpy().ravel()
         params.append(np_value)
     vector = np.concatenate(params)
-    print(f"Final vector length: {len(vector)}")
+    #print(f"Final vector length: {len(vector)}")
     return vector
 
 def vector_to_state_dict(vector, reference_state_dict):
     vector = np.asarray(vector).flatten()  
-    print(f"Vector shape after flatten: {vector.shape}")  # Debug
+   # print(f"Vector shape after flatten: {vector.shape}")  # Debug
     new_state_dict = {}
     idx = 0
 
