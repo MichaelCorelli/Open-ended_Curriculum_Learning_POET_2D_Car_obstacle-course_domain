@@ -3,7 +3,7 @@
 ## **Overview**
 This project implements a reinforcement learning framework based on the **Paired Open-Ended Trailblazer (POET)** algorithm. The goal is to train a 2D car agent to navigate dynamically evolving obstacle courses while simultaneously evolving the environments for progressive learning.
 
-The environment is built using **Box2D** and **Pygame**, and the agent is trained using **Deep Q-Learning (Double DQN)**. The POET algorithm is adapted to handle 2D car-specific challenges, such as ramps, bumps, and holes.
+The environment is built using **Box2D** and **Pygame**, and the agent is trained using **DOuble Deep Q-Learning (DDQN)**. The POET algorithm is adapted to handle 2D car-specific challenges, such as ramps, bumps, and holes. The algorithm causes the obstacles we choose to change their size so that the agent improves its performance.
 
 This project was developed for the **Reinforcement Learning course A.Y. 2024/2025**.
 
@@ -22,15 +22,19 @@ This project was developed for the **Reinforcement Learning course A.Y. 2024/202
 - Rendered using Pygame with customizable textures.
 
 ### 3. **POET Algorithm**
-- **Co-evolution**: simultaneous evolution of agent policies and environment difficulties.
+- **Co-evolution**: simultaneous evolution of the agent's policies and the difficulties of the environment, in fact POET allows environments to evolve dynamically. The obstacles created are adapted to the agent in its environment having characteristics not too easy and not too difficult and try to improve the performance of the machine by placing obstacles with an adequate and increasing difficulty. The algorithm also manages the location of obstacle creation, to avoid them being generated at coincident points.
 - **Novelty ranking**: promotes diversity by evaluating the novelty of new environments.
-- **Minimal Criterion (MC)**: ensures environments meet specific performance thresholds before being added.
+- **Minimal Criterion (MC)**: ensures that environments meet specific performance thresholds before being added, allowing these thresholds to dynamically vary in fixed ranges.
 - **Policy Transfer**: Transfers learned policies between environments to tackle harder challenges.
 
-### 4. **Double DQN**
+### 4. **Policy Network**
 - Neural network-based policy optimization with:
   - Batch normalization and dropout for stable training.
   - Experience replay for sample efficiency.
+
+### 5. **Double DQN**
+- the current Q-network is used to choose the actions
+- the older Q-network is used to evaluate the actions 
 
 ---
 
