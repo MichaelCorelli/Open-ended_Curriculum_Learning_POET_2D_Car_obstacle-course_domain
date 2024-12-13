@@ -177,13 +177,13 @@ The project evaluates the agent's performance using the following metrics:
 
 1. **R. Wang, J. Lehman, J. Clune, and K. O. Stanley**  
    *"Paired Open-Ended Trailblazer (POET): Endlessly Generating Increasingly Complex and Diverse Learning Environments and Their Solutions,"*  
-   arXiv preprint arXiv:1901.01753v3, 2019.  
+   arXiv:1901.01753v3, 2019.  
    [https://arxiv.org/abs/1901.01753](https://arxiv.org/abs/1901.01753)
 
 2. **Roberto Capobianco**  
    *More off-policy & DQN.pdf,* Lecture Notes, 2024.
 
-3. **KRL Group**  
+3. **RL Practical Github**  
    GitHub Repository for Reinforcement Learning Course, 2024.  
    [https://github.com/KRLGroup/RL_2024.git](https://github.com/KRLGroup/RL_2024.git)
 
