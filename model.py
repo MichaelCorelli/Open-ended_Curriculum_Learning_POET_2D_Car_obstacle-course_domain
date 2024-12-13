@@ -38,9 +38,6 @@ class PolicyNetwork(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-def tensor(tuple):
-    return torch.stack([torch.tensor(j, dtype=torch.float32, device=device) for j in tuple])
-
 class Buffer:
 
     def __init__(self, size=20000, burn_in=5000):
@@ -95,7 +92,6 @@ class Q(nn.Module):
         self.network.train()
     
         return action[0]
-
 
 class DDQN:
     def __init__(self, env, b, lr, epsilon_initial, batch_size, threshold_r, render_during_training=False):

@@ -187,11 +187,28 @@ class POET:
         M = len(EA_list)
         if M > self.capacity:
             num_removals = M - self.capacity
-            removed = self.envs[:num_removals]
-            self.envs = self.envs[num_removals:]
-            self.archive_envs.extend(removed)
+            removed_envs = EA_list[:num_removals]
+            self.archive_envs.extend(removed_envs)
 
-        self.archive(archive_envs_max_size = self.archive_envs_max_size)
+            if len(self.archive_envs) > self.archive_envs_max_size:
+                excess = len(self.archive_envs) - self.archive_envs_max_size
+                self.archive_envs = self.archive_envs[excess:]
+
+            self.remove_oldest(EA_list, num_removals)
+
+        self.envs = EA_list.copy()
+
+        for E, theta in EA_list:
+            key = (E, tuple(theta))
+            if key not in self.r_history:
+                self.r_history[key] = []
+
+            score = E.evaluate_agent(self.ddqn_agent, None)
+            r_mean = score['r_mean']
+            self.r_history[key].append(r_mean)
+
+        self.update_threshold_c([r for rewards in self.r_history.values() for r in rewards])
+        self.update_threshold_el([r for rewards in self.r_history.values() for r in rewards])
 
         return EA_list
 

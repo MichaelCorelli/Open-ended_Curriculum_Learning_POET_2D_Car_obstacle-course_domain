@@ -65,7 +65,7 @@ Open-ended_Curriculum_Learning_POET_2D_Car_obstacle-course_domain/
 - Implements the **POET** algorithm:
   - `main_loop`: Main POET training and evolution loop.
   - `mutate_envs`: Mutates environments and evaluates offspring.
-  - `evaluate_candidates`: Updates policies using Evolution Strategies (ES).
+  - `evaluate_candidates`: Updates policies using neural network and the DDQN algorithm or by Evolution Strategies.
 
 #### **`model.py`**
 - Defines the **Double DQN (DDQN)** agent:
