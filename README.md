@@ -179,12 +179,18 @@ The project evaluates the agent's performance using the following metrics:
    [https://github.com/KRLGroup/RL_2024.git](https://github.com/KRLGroup/RL_2024.git)
 
 ## **Contacts**
-For questions or contributions, please reach out to:
-- Name: Gianmarco Donnesi
-- Email: donnesi.2152311@studenti.uniroma1.it
+For questions, feedback, or contributions, feel free to get in touch with us:
 
-- Name: Michael Corelli
-- Email: corelli.1938627@studenti.uniroma1.it
+<div align="center">
+
+| **Name**              | **Email Address**                      |
+|------------------------|---------------------------------------|
+| Gianmarco Donnesi     | [donnesi.2152311@studenti.uniroma1.it](mailto:donnesi.2152311@studenti.uniroma1.it) |
+| Michael Corelli       | [corelli.1938627@studenti.uniroma1.it](mailto:corelli.1938627@studenti.uniroma1.it) |
+
+</div>
+
+---
 
 ## **License**
 This project is licensed under the [GPL-3.0 License](LICENSE). See the file for more details.
