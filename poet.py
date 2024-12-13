@@ -5,9 +5,7 @@ from env import CarEnvironment
 from utils import state_dict_to_vector, vector_to_state_dict
 from tqdm import tqdm
 
-
 BLACK = (0, 0, 0)
-
 
 class POET:
     def __init__(self, car, ddqn_agent, E_init, theta_init, alpha, noise_std, T, N_mutate, N_transfer, env_input_dim, hidden_dim, action_dim):
@@ -48,6 +46,8 @@ class POET:
         self.archive_envs = []
         #max size for archive_envs
         self.archive_envs_max_size = 5
+        #reward history dictionary for every (E, agent)
+        self.r_history = {}
 
     def update_threshold_c(self, r_history, window_size = 5, range = 0.1):
 
@@ -62,7 +62,7 @@ class POET:
 
         print(f"Thresholds: min = {self.threshold_c_min}, max = {self.threshold_c_max}")
 
-    def update_threshold_el(self, r_history, window_size = 5, adjustment_factor = 0.03):
+    def update_threshold_el(self, r_history, window_size = 5, v = 0.03):
 
         if len(r_history) < window_size:
             r = r_history
@@ -72,14 +72,13 @@ class POET:
         r_mean = np.mean(r)
 
         if r_mean < self.threshold_el:
-            self.threshold_el = max(0, self.threshold_el - adjustment_factor)
+            self.threshold_el = max(0, self.threshold_el - v)
         else:
-            self.threshold_el = min(1, self.threshold_el + adjustment_factor)
+            self.threshold_el = min(1, self.threshold_el + v)
 
         print(f"Eligibility threshold: {self.threshold_el}")
         
     def _evaluate_agent_with_vector(self, E, theta_vector):
-        # Convert vector to state_dict
         print(f"Vector shape: {theta_vector.shape}")
         total_params = sum(p.numel() for p in self.reference_state_dict.values())
         print(f"Expected total params: {total_params}")
@@ -106,7 +105,7 @@ class POET:
 
         for E_child, theta_child in child_list:
             score = self._evaluate_agent_with_vector(E_child, theta_child)
-            mean_reward = score['mean_reward']  # Estrai il valore numerico
+            mean_reward = score['mean_reward']
             if self.threshold_c_min <= mean_reward <= self.threshold_c_max:
                 res.append((E_child, theta_child))
 
@@ -244,16 +243,13 @@ class POET:
 
     #evaluate_candidiates with ddqn_agent
     def evaluate_candidates(self, theta_list, E, alpha, noise_std):
-        # theta_list is a list of vectors
         theta_m_t = np.mean(theta_list, axis=0)
 
         epsilon = np.random.randn(self.n, theta_m_t.shape[0])
         E_i = []
 
-        # ES step approximation
         for epsilon_i in epsilon:
             theta_variation = theta_m_t + noise_std * epsilon_i
-            # Convert to state_dict to load
             theta_variation_sd = vector_to_state_dict(theta_variation, self.reference_state_dict)
             self.ddqn_agent.network.network.load_state_dict(theta_variation_sd)
             performance = E.evaluate_agent(self.ddqn_agent, theta_variation_sd)
@@ -263,7 +259,6 @@ class POET:
         gradient_estimation = np.sum(E_i[:, np.newaxis] * epsilon, axis=0)
         theta_updated = theta_m_t + alpha * (1 / (self.n * noise_std)) * gradient_estimation
 
-        # Now we have candidate set C: original theta_list plus theta_updated
         C = theta_list + [theta_updated]
         performances = []
         for theta in C:
@@ -276,21 +271,39 @@ class POET:
 
         return best_theta
     
-    def update_environments(self, t, d_min = 10, max = 100):
+    def update_environments(self, t, d_min = 10, i_max = 100):
+
+        threshold_incr_init = 0.8
+        threshold_decr_init = 0.4
+        rate_init = 0.1
+        difficulty_max_init = 2.0
 
         for i, (E, theta) in enumerate(self.envs):
             if E is None:
                 E = CarEnvironment()
                 self.envs[i] = (E, theta)
 
-            if not hasattr(E, "obstacles"):
-                E.obstacles = []
+            score = E.evaluate_agent(self.ddqn_agent, None)
+            r_mean = score['r_mean']
 
-            existing_p = E.obstacles
+            threshold_difficulty_incr = min(1, threshold_incr_init + 0.15 * (t / 1000))
+            threshold_difficulty_decr = max(0, threshold_decr_init - 0.15 * (t / 1000))
+            rate_difficulty = rate_init * (1 + 0.02 * t)
+            difficulty_max = min(5.0, difficulty_max_init + 0.003 * t)
 
-            obstacles_n = random.randint(1, 3)
+            difficulty_factor = 1
+            if r_mean >= threshold_difficulty_incr:
+                difficulty_factor += rate_difficulty * (r_mean - threshold_difficulty_incr)
+            elif r_mean <= threshold_difficulty_decr:
+                difficulty_factor -= rate_difficulty * (threshold_difficulty_decr - r_mean)
+
+            difficulty_factor = min(difficulty_max, max(1, difficulty_factor))
+
+            obstacles_n = int(difficulty_factor * 2)
+            existing_p = E.obstacles if hasattr(E, "obstacles") else []
+
             for _ in range(obstacles_n):
-                for _ in range(max):
+                for _ in range(i_max):
                     p = (random.uniform(15, 60), random.uniform(2, 25))
                     
                     if all(np.linalg.norm(np.array(p) - np.array(pos)) >= d_min for pos in existing_p):
@@ -321,13 +334,19 @@ class POET:
 
             E.obstacles = existing_p
             
-            # Evaluate agent in the updated environment with current ddqn weights (no theta provided means internal agent weights)
             reward = E.evaluate_agent(self.ddqn_agent, None)
             print(f"Reward: {reward}")
 
+            key = (E, tuple(theta))
+            if key not in self.r_history:
+                self.r_history[key] = []
+            self.r_history[key].append(r_mean)
+
+            self.update_threshold_c(self.r_history)
+            self.update_threshold_el(self.r_history)
+
     def main_loop(self):
         EA_list = [(self.E_init, self.theta_init)]
-        r_history = []
 
         with tqdm(total=self.T, desc="POET Main Loop Progress") as pbar:
             for t in range(self.T):
@@ -348,13 +367,16 @@ class POET:
                     print(f"Score: {score}")
 
                     r_mean = score['r_mean']
-                    r_history.append(r_mean)
 
-                    self.update_threshold_c(r_history)
-                    self.update_threshold_el(r_history)
+                    key = (E_m, tuple(theta_m_t))
+                    if key not in self.r_history:
+                        self.r_history[key] = []
+                    self.r_history[key].append(r_mean)
+
+                    self.update_threshold_c(self.r_history[key])
+                    self.update_threshold_el(self.r_history[key])
                             
                     #theta_m_t_1 = theta_m_t + self.es_step(theta_m_t, E_m, self.alpha, self.noise_std)
-                    # After training, get the updated theta from agent (state_dict)
                     updated_sd = self.ddqn_agent.network.network.state_dict()
                     updated_vec = state_dict_to_vector(updated_sd)
                     theta_m_t_1 = updated_vec
@@ -362,7 +384,6 @@ class POET:
                     if M > 1 and t % self.N_transfer == 0:
                         theta_b_a_m = [theta for j, (_, theta) in enumerate(EA_list) if j != m]
                         theta_top = self.evaluate_candidates(theta_b_a_m, E_m, self.alpha, self.noise_std)
-                        # Compare performance of theta_top and theta_m_t_1
                         top_score = self._evaluate_agent_with_vector(E_m, theta_top)
                         current_score = self._evaluate_agent_with_vector(E_m, theta_m_t_1)
                         print(f"theta_top score: {top_score}, current score: {current_score}")
