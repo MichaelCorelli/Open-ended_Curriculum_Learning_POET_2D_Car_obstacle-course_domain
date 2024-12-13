@@ -51,29 +51,29 @@ Open-ended_Curriculum_Learning_POET_2D_Car_obstacle-course_domain/
 └── LICENSE
 ```
 
-### **`env.py`**
+#### **`env.py`**
 - Defines the **`CarEnvironment`** class:
   - Implements the simulation logic using Box2D.
   - Handles obstacles, rendering, and reward calculation.
 - Includes car dynamics and LiDAR data collection.
 
-### **`poet.py`**
+#### **`poet.py`**
 - Implements the **POET** algorithm:
   - `main_loop`: Main POET training and evolution loop.
   - `mutate_envs`: Mutates environments and evaluates offspring.
   - `evaluate_candidates`: Updates policies using Evolution Strategies (ES).
 
-### **`model.py`**
+#### **`model.py`**
 - Defines the **Double DQN (DDQN)** agent:
   - Neural network for Q-value estimation.
   - Training logic, experience replay buffer, and evaluation methods.
 
-### **`utils.py`**
+#### **`utils.py`**
 - Utility functions for:
   - State dict to vector conversion and vice versa.
   - Neural network parameter manipulation.
 
-### **`main.py`**
+#### **`main.py`**
 - Entry point for running the project:
   - Initializes the environment and agent.
   - Executes the POET main loop.
