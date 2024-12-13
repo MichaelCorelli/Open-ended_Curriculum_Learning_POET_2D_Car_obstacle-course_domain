@@ -1,4 +1,4 @@
-# Open-ended_Curriculum_Learning_POET_2D_Car_obstacle-course_domain
+# Open-ended Curriculum Learning with POET in a 2D Car Obstacle-Course Domain
 
 ## **Overview**
 This project implements a reinforcement learning framework based on the **Paired Open-Ended Trailblazer (POET)** algorithm. The goal is to train a 2D car agent to navigate dynamically evolving obstacle courses while simultaneously evolving the environments for progressive learning.
@@ -17,15 +17,15 @@ This project was developed for the **Reinforcement Learning course A.Y. 2024/202
   - Observations: LiDAR-based sensor data and car's position/velocity.
 
 ### 2. **Environment**
-- Obstacle types: ramps, holes, and bumps.
-- Mutations: environments evolve dynamically with increasing difficulty.
+- **Obstacle types**: ramps, holes, and bumps.
+- **Mutations**: environments evolve dynamically with increasing difficulty.
 - Rendered using Pygame with customizable textures.
 
 ### 3. **POET Algorithm**
-- Co-evolution: simultaneous evolution of agent policies and environment difficulties.
-- Novelty ranking: promotes diversity by evaluating the novelty of new environments.
-- Minimal Criterion (MC): ensures environments meet specific performance thresholds before being added.
-- Policy Transfer: Transfers learned policies between environments to tackle harder challenges.
+- **Co-evolution**: simultaneous evolution of agent policies and environment difficulties.
+- **Novelty ranking**: promotes diversity by evaluating the novelty of new environments.
+- **Minimal Criterion (MC)**: ensures environments meet specific performance thresholds before being added.
+- **Policy Transfer**: Transfers learned policies between environments to tackle harder challenges.
 
 ### 4. **Double DQN**
 - Neural network-based policy optimization with:
@@ -86,17 +86,20 @@ Open-ended_Curriculum_Learning_POET_2D_Car_obstacle-course_domain/
 ### **Requirements**
 - Python 3.9.6
 - Dependencies:
-  - `pygame`
-  - `Box2D`
-  - `gymnasium`
   - `torch`
   - `numpy`
   - `matplotlib`
+  - `pygame`
+  - `gymnasium`
+  - `Box2D`
+  - `scipy`
+  - `scikit-learn`
+  - `tqdm`
 
 ### **Installation**
 1. Clone this repository:
    ```bash
-   git clone https://github.com/your-repo/poet-car-rl.git
+   git clone https://github.com/MichaelCorelli/Open-ended_Curriculum_Learning_POET_2D_Car_obstacle-course_domain
    ```
 
 2. Install the required packages:
@@ -129,8 +132,8 @@ python main.py
 ### **2. Visualizing the Trained Agent**
 After training, you can visualize the agent's performance in various environments:
 - Use the arrow keys to navigate between environments.
-- Press **Right Arrow (\u2192)** to view the next environment.
-- Press **Left Arrow (\u2190)** to view the previous environment.
+- Press **Right Arrow (→)** to view the next environment.
+- Press **Left Arrow (←)** to view the previous environment.
 
 ### **3. Profiling (Optional)**
 To profile the execution:
@@ -146,21 +149,18 @@ python main.py --profile
 2. **Agent Training**: Train the car agent using Double DQN on the initial environment.
 3. **Environment Mutation**: Gradually evolve environments by adding/changing obstacles.
 4. **Policy Transfer**: Transfer trained policies between environments to tackle harder challenges.
-5. **Evaluation**: Assess agent performance and log metrics such as:
-   - Mean reward
-   - Steps taken
-   - Final positions
+5. **Evaluation**: Assess agent performance and log metrics.
 
 ---
 
 ## **Key Metrics**
 The project evaluates the agent's performance using the following metrics:
 
-- Mean Reward per Environment: average cumulative reward the agent receives across episodes.
-- Standard Deviation of Rewards: measures the variability in rewards, indicating consistency.
-- Minimum and Maximum Rewards: tracks the best and worst performance across episodes.
-- Mean and Standard Deviation of Steps per Episode: indicates how efficiently the agent completes tasks.
-- Mean, Minimum, and Maximum Final Positions: assesses how far the agent travels in the environment.
+- **Mean Reward per Environment**: average cumulative reward the agent receives across episodes.
+- **Standard Deviation of Rewards**: measures the variability in rewards, indicating consistency.
+- **Minimum and Maximum Rewards**: tracks the best and worst performance across episodes.
+- **Mean and Standard Deviation of Steps per Episode**: indicates how efficiently the agent completes tasks.
+- **Mean, Minimum, and Maximum Final Positions**: assesses how far the agent travels in the environment.
 
 ---
 
