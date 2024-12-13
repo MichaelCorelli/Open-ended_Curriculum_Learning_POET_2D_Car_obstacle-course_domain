@@ -176,7 +176,7 @@ The project evaluates the agent's performance using the following metrics:
 ## References
 
 1. **R. Wang, J. Lehman, J. Clune, and K. O. Stanley**  
-   *"Paired Open-Ended Trailblazer (POET): Endlessly Generating Increasingly Complex and Diverse Learning Environments and Their Solutions,"*  
+   *"Paired Open-Ended Trailblazer (POET): Endlessly Generating Increasingly Complex and Diverse Learning Environments and Their Solutions"*  
    arXiv:1901.01753v3, 2019.  
    [https://arxiv.org/abs/1901.01753](https://arxiv.org/abs/1901.01753)
 
