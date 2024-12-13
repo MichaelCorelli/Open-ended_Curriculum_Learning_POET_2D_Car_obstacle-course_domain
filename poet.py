@@ -48,6 +48,35 @@ class POET:
         self.archive_envs = []
         #max size for archive_envs
         self.archive_envs_max_size = 5
+
+    def update_threshold_c(self, r_history, window_size = 5, range = 0.1):
+
+        if len(r_history) < window_size:
+            r = r_history
+        else:
+            r = r_history[-window_size:]
+
+        r_mean = np.mean(r)
+        self.threshold_c_min = max(0, r_mean - range)
+        self.threshold_c_max = min(1, r_mean + range)
+
+        print(f"Thresholds: min = {self.threshold_c_min}, max = {self.threshold_c_max}")
+
+    def update_threshold_el(self, r_history, window_size = 5, adjustment_factor = 0.03):
+
+        if len(r_history) < window_size:
+            r = r_history
+        else:
+            r = r_history[-window_size:]
+
+        r_mean = np.mean(r)
+
+        if r_mean < self.threshold_el:
+            self.threshold_el = max(0, self.threshold_el - adjustment_factor)
+        else:
+            self.threshold_el = min(1, self.threshold_el + adjustment_factor)
+
+        print(f"Eligibility threshold: {self.threshold_el}")
         
     def _evaluate_agent_with_vector(self, E, theta_vector):
         # Convert vector to state_dict
@@ -137,7 +166,6 @@ class POET:
         print(f"child_list: {child_list}")
         return child_list
 
-
     def mutate_envs(self, EA_list):
         parent_list = []
 
@@ -198,7 +226,7 @@ class POET:
         return alpha * (1 / self.n * noise_std) * res
     '''
     
-    #evaluate_candidiates con es_step
+    #evaluate_candidiates with es_step
     '''
     def evaluate_candidates(self, theta_list, E, alpha, noise_std):
         C = []
@@ -214,7 +242,7 @@ class POET:
         return best_theta
     '''
 
-    #evaluate_candidiates con ddqn_agent
+    #evaluate_candidiates with ddqn_agent
     def evaluate_candidates(self, theta_list, E, alpha, noise_std):
         # theta_list is a list of vectors
         theta_m_t = np.mean(theta_list, axis=0)
@@ -248,11 +276,29 @@ class POET:
 
         return best_theta
     
-    def update_environments(self, t):
+    def update_environments(self, t, d_min = 10, max = 100):
+
         for i, (E, theta) in enumerate(self.envs):
             if E is None:
                 E = CarEnvironment()
                 self.envs[i] = (E, theta)
+
+            if not hasattr(E, "obstacles"):
+                E.obstacles = []
+
+            existing_p = E.obstacles
+
+            obstacles_n = random.randint(1, 3)
+            for _ in range(obstacles_n):
+                for _ in range(max):
+                    p = (random.uniform(15, 60), random.uniform(2, 25))
+                    
+                    if all(np.linalg.norm(np.array(p) - np.array(pos)) >= d_min for pos in existing_p):
+                        existing_p.append(p)
+                        break
+
+                else:
+                    continue
 
             obstacle_type = random.choice(["ramp", "bump", "hole"])
 
@@ -272,12 +318,16 @@ class POET:
             }
 
             E.modify_env(modified_env_params)
+
+            E.obstacles = existing_p
+            
             # Evaluate agent in the updated environment with current ddqn weights (no theta provided means internal agent weights)
             reward = E.evaluate_agent(self.ddqn_agent, None)
             print(f"Reward: {reward}")
 
     def main_loop(self):
         EA_list = [(self.E_init, self.theta_init)]
+        r_history = []
 
         with tqdm(total=self.T, desc="POET Main Loop Progress") as pbar:
             for t in range(self.T):
@@ -293,6 +343,15 @@ class POET:
                     self.ddqn_agent.env = E_m
                     print(f"Training agent on env: {m}")
                     self.ddqn_agent.train(e_max=100, gamma=0.99, frequency_update=10, frequency_sync=100)
+
+                    score = E_m.evaluate_agent(self.ddqn_agent, None)
+                    print(f"Score: {score}")
+
+                    r_mean = score['r_mean']
+                    r_history.append(r_mean)
+
+                    self.update_threshold_c(r_history)
+                    self.update_threshold_el(r_history)
                             
                     #theta_m_t_1 = theta_m_t + self.es_step(theta_m_t, E_m, self.alpha, self.noise_std)
                     # After training, get the updated theta from agent (state_dict)
