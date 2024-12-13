@@ -181,7 +181,7 @@ The project evaluates the agent's performance using the following metrics:
 ## **Contacts**
 For questions, feedback, or contributions, feel free to get in touch with us:
 
-<div align="center">
+<div align="left">
 
 | **Name**              | **Email Address**                      |
 |------------------------|---------------------------------------|
