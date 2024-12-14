@@ -4,15 +4,13 @@ from poet import POET, state_dict_to_vector
 from env import CarEnvironment, Car
 import random
 import cProfile
+import argparse
 
-
-def main():
-   
+def main(profile=False):
     env = CarEnvironment()
     car = Car(env.world, position=(10, 4))
     b = Buffer()
-    
-    
+
     agent = DDQN(
         env=env, 
         b=b, 
@@ -20,14 +18,14 @@ def main():
         epsilon_initial=0.5, 
         batch_size=64, 
         threshold_r=200,
-        render_during_training=False
+        render_during_training=True
     )
-    
+
     theta_init_sd = agent.network.network.state_dict()
     theta_init_vec = state_dict_to_vector(theta_init_sd)
     print(f"Initialized theta vector length: {len(theta_init_vec)}")
     E_init = env
-    
+
     # Initialize POET
     poet = POET(
         car=car,
@@ -43,21 +41,25 @@ def main():
         hidden_dim=128,
         action_dim=9
     )
-    
-    #Agent training
+
+    # Agent training
     poet.main_loop()
-    
-    #Agent evaluation
+
+    # Agent evaluation
     metrics = agent.evaluate(env, ep_n=15, render=False, verbose=True)
     print(metrics)
-    
+
     all_envs = poet.envs + poet.archive_envs
     number_of_random_envs = 10
-    sampled_envs = random.sample(all_envs, min(number_of_random_envs, len(all_envs)))
-    display_envs = [poet.E_init] + [env for env, _ in sampled_envs]
-    
+    if all_envs:
+        sampled_envs = random.sample(all_envs, min(number_of_random_envs, len(all_envs)))
+        display_envs = [poet.E_init] + [env for env, _ in sampled_envs]
+    else:
+        display_envs = [poet.E_init]
+
     current_idx = 0
-    
+    clock = pygame.time.Clock()
+
     running = True
     while running:
         for event in pygame.event.get():
@@ -69,20 +71,31 @@ def main():
             # Press the window close button (X) to exit.  
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RIGHT:
-                    current_idx = (current_idx + 1) % len(display_envs)
+                    if display_envs:
+                        current_idx = (current_idx + 1) % len(display_envs)
                 elif event.key == pygame.K_LEFT:
-                    current_idx = (current_idx - 1) % len(display_envs)
+                    if display_envs:
+                        current_idx = (current_idx - 1) % len(display_envs)
 
-        pygame.display.flip()
-        display_envs[current_idx].render()  
+        if display_envs:
+            pygame.display.flip()
+            clock.tick(30)
+            display_envs[current_idx].render()
 
     env.close()
     pygame.quit()
-    
 
 if __name__ == "__main__":
-    profiler = cProfile.Profile()
-    profiler.enable()
-    main()
-    profiler.disable()
-    profiler.print_stats(sort='time')
+    parser = argparse.ArgumentParser(description="POET 2D Car Simulation")
+    parser.add_argument('--profile', action='store_true', help='Enable profiling')
+
+    args = parser.parse_args()
+
+    if args.profile:
+        profiler = cProfile.Profile()
+        profiler.enable()
+        main(profile=True)
+        profiler.disable()
+        profiler.print_stats(sort='time')
+    else:
+        main()

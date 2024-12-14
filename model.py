@@ -6,8 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import namedtuple, deque
 
-# Controllare
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("mps" if torch.cuda.is_available() else "cpu")
 
 class PolicyNetwork(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
@@ -56,6 +55,8 @@ class Buffer:
         self.replay.append(self.buffer(s_0, a, r, d, s_1))
 
     def batch(self, batch_size=32):
+        if len(self.replay) < batch_size:
+            batch_size = len(self.replay)
         indices = torch.randint(0, len(self.replay), (batch_size,))
         batch = [self.replay[i] for i in indices]
         s, a, r, d, ns = zip(*batch)
@@ -105,6 +106,8 @@ class DDQN:
         
         self.network = Q(env, lr=self.lr).to(device)
         self.network_t = Q(env, lr=self.lr).to(device)
+        self.network_t.network.load_state_dict(self.network.network.state_dict())
+        self.network_t.network.eval()
 
         self.step_c = 0
         self.rewards = 0
@@ -115,6 +118,8 @@ class DDQN:
         self.train_mean_rewards = []
         self.window = 100
         self.render_during_training = render_during_training
+
+        self.gamma = 0.99
 
     def update(self):
         self.network.network.train()
@@ -159,8 +164,8 @@ class DDQN:
         return done
 
     def train(self, e_max, gamma, frequency_update, frequency_sync):
-        self.e_max = e_max
         self.gamma = gamma
+        self.e_max = e_max
         self.frequency_update = frequency_update
         self.frequency_sync = frequency_sync
 
@@ -180,7 +185,7 @@ class DDQN:
                 done = False
 
                 while not done:
-                    if ((e % 10) == 0):
+                    if ((e % 10) == 0) and self.render_during_training:
                         self.env.render()
 
                     p = np.random.random()
@@ -283,17 +288,33 @@ class DDQN:
         return metrics
 
     def save(self):
-        torch.save(self.network.state_dict(), "Q_state_dict.pth")
+        
+        torch.save({
+            'network_state_dict': self.network.network.state_dict(),
+            'target_network_state_dict': self.network_t.network.state_dict(),
+            'optimizer_state_dict': self.network.optimizer.state_dict(),
+        }, "DDQN_state_dict.pth")
 
     def load(self):
-        self.network.load_state_dict(torch.load("Q_state_dict.pth"))
-        self.network.eval()
+        checkpoint = torch.load("DDQN_state_dict.pth")
+        self.network.network.load_state_dict(checkpoint['network_state_dict'])
+        self.network_t.network.load_state_dict(checkpoint['target_network_state_dict'])
+        self.network.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.network.network.eval()
+        self.network_t.network.eval()
 
     def plot(self):
         plt.plot(self.train_mean_rewards)
-        plt.title('Train: mean rewards')
-        plt.ylabel('reward')
-        plt.xlabel('episodes')
-        plt.show()
+        plt.title('Train: Mean Rewards')
+        plt.ylabel('Reward')
+        plt.xlabel('Episodes')
         plt.savefig('train_mean_rewards.png')
-        plt.clf()
+        plt.close()
+
+    def plot_losses(self):
+        plt.plot(self.train_loss)
+        plt.title('Train: Loss')
+        plt.ylabel('Loss')
+        plt.xlabel('Updates')
+        plt.savefig('train_loss.png')
+        plt.close()
