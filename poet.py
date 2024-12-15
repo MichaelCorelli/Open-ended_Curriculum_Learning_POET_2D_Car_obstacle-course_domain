@@ -77,8 +77,7 @@ class POET:
         score = self._evaluate_agent_with_vector(E, theta)
         print(f"Score: {score}, Threshold: {self.threshold_el}")
         mean_reward = score['mean_reward']
-        
-        #Controlla se il nuovo punteggio è migliore del miglior punteggio precedente
+
         if mean_reward > self.best_reward:
             self.best_reward = mean_reward
             return True
@@ -105,17 +104,22 @@ class POET:
         print(f"Result in mc_satisfied: {res}")
         return res
 
-    def rank_by_novelty(self, child_list):
+    def rank_by_novelty(self, child_list, k = 3):
         e = self.envs + self.archive_envs
         child_novelty = []
 
         for E_child, theta_child in child_list:
+            r_child = self._evaluate_agent_with_vector(E_child, theta_child)['mean_reward']
             dist = []
-            for E, theta in e:
-                score_diff = self._evaluate_agent_with_vector(E_child, theta_child)['mean_reward'] - self._evaluate_agent_with_vector(E, theta)['mean_reward']
-                dist.append(abs(score_diff))
 
-            novelty_score = np.mean(dist) if dist else 0.0
+            for E, theta in e:
+                r = self._evaluate_agent_with_vector(E, theta)['mean_reward']
+                dist.append(abs(r_child - r))
+
+            dist.sort()
+            nearest_neighbors = dist[:k]
+
+            novelty_score = np.mean(nearest_neighbors) if nearest_neighbors else 0.0
             print(f"Theta_child novelty score: {novelty_score}")
             child_novelty.append((E_child, theta_child, novelty_score))
 
@@ -262,7 +266,6 @@ class POET:
             performance = E.evaluate_agent(self.ddqn_agent, theta_variation_sd)
             E_i.append(performance['mean_reward'])
 
-        # Restore original network state
         self.ddqn_agent.network.network.load_state_dict(current_state_dict)
 
         E_i = np.array(E_i)
@@ -277,7 +280,6 @@ class POET:
             performance = E.evaluate_agent(self.ddqn_agent, theta_sd)
             performances.append(performance['mean_reward'])
 
-        # Restore original network state again
         self.ddqn_agent.network.network.load_state_dict(current_state_dict)
 
         i_best = np.argmax(performances)
@@ -410,7 +412,7 @@ class POET:
 
                     if M > 1 and t % self.N_transfer == 0:
                         theta_b_a_m = [theta for j, (_, theta) in enumerate(EA_list) if j != m]
-                        if theta_b_a_m:  # Ensure list is not empty
+                        if theta_b_a_m:
                             theta_top = self.evaluate_candidates(theta_b_a_m, E_m, self.alpha, self.noise_std)
                             top_score = self._evaluate_agent_with_vector(E_m, theta_top)
                             current_score = self._evaluate_agent_with_vector(E_m, theta_m_t_1)
