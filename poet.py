@@ -210,7 +210,7 @@ class POET:
             if key not in self.r_history:
                 self.r_history[key] = []
             score = E.evaluate_agent(self.ddqn_agent, None)
-            r_mean = score['r_mean']
+            r_mean = score['mean_reward']
             self.r_history[key].append(r_mean)
         self.update_threshold_c([r for rewards in self.r_history.values() for r in rewards])
         self.update_threshold_el([r for rewards in self.r_history.values() for r in rewards])
