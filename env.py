@@ -29,7 +29,7 @@ class RayCastCallback(b2RayCastCallback):
 
 class CarEnvironment(gym.Env):
     metadata = {'render.modes': ['human']}
-    pygame_initialized = False  # Class variable to check if Pygame is initialized
+    pygame_initialized = False
 
     def __init__(self):
         super(CarEnvironment, self).__init__()
@@ -91,7 +91,7 @@ class CarEnvironment(gym.Env):
         self.reset()
 
     def reset(self):
-        self.world = world(gravity=(0, -10), doSleep=True)
+        self.world = world(gravity=(0, -15), doSleep=True)
         self.bodies = []
         self.obstacles = []
         self.passed_obstacles = set()
@@ -108,10 +108,31 @@ class CarEnvironment(gym.Env):
         self.step_count = 0
 
         self.modify_env({"base_position":(20, 1), "size":(1, 0.7), "color": BLACK, "obstacle_type":'ramp'})
-        self.modify_env({"base_position":(40, 1), "size":(1, 4), "color":BLACK, "obstacle_type":'hole'})
+        self.modify_env({"base_position":(40, 1), "size":(1, 15), "color":BLACK, "obstacle_type":'hole'})
         self.modify_env({"base_position":(60, 1), "size":(2, 1), "color":BLACK, "obstacle_type":'bump'})
+        
+        self._create_ground_with_holes()
 
         return self._get_state(), {}
+    
+    def _create_ground_with_holes(self):
+        ground_length = 100  
+        segment_length = 1 
+        for i in range(int(ground_length / segment_length)):
+            x = i * segment_length + 0.5 * segment_length
+            is_hole = False
+            for obs in self.obstacles:
+                if obs['type'] == 'hole':
+                    hole_x, hole_width = obs['params']['base_position'][0], obs['params']['size'][0]
+                    if hole_x - segment_length / 2 <= x <= hole_x + hole_width + segment_length / 2:
+                        is_hole = True
+                        break
+            if not is_hole:
+                ground_segment = self.world.CreateStaticBody(
+                    position=(x, 0),
+                    shapes=polygonShape(box=(segment_length / 2, 1))
+                )
+                self.add_body(ground_segment, GREEN)
 
     def step(self, action):
         steering, acceleration = self.actions[action]
@@ -189,7 +210,6 @@ class CarEnvironment(gym.Env):
         color = params["color"]
 
         if obstacle_type == "ramp":
-            # Create a ramp
             vertices = [(0, 0), (width, 0), (width, height)]
             ramp = self.world.CreateStaticBody(
                 position=(x, y),
@@ -208,6 +228,7 @@ class CarEnvironment(gym.Env):
                 'type': obstacle_type,
                 'params': params
             })
+            self._create_ground_with_holes()
 
         elif obstacle_type == "bump":
             vertices = [(0, 0), (width, 0), (width / 2, height)]
@@ -279,42 +300,55 @@ class CarEnvironment(gym.Env):
 
     def _calculate_reward(self):
         reward = 0
-        if self.done:
-            if hasattr(self, 'done_reason') and self.done_reason == 'hole':
-                reward += -20
-            else:
-                reward -= 40
+        #1. Reward for forward movement
+        if len(self.prev_positions) >= 2:
+            current_x = self.prev_positions[-1][0]
+            previous_x = self.prev_positions[-2][0]
+            delta_x = current_x - previous_x
+            reward += delta_x * 10 
 
+            #2. Penalties for backward movements
+            if delta_x < 0:
+                reward -= 100
+        else:
+            delta_x = 0 
+
+        #3. Reward for each step
+        reward += 1
+
+        #4. Specific rewards for overcoming obstacles
         for idx, obs in enumerate(self.obstacles):
             base_x, base_y = obs['params']['base_position']
             size_x, size_y = obs['params']['size']
             if base_x + size_x < self.car.body.position[0] and idx not in self.passed_obstacles:
-                reward += 200 
+                if obs['type'] == 'ramp':
+                    reward += 300 
+                elif obs['type'] == 'hole':
+                    reward += 200
+                elif obs['type'] == 'bump':
+                    reward += 180  
                 self.passed_obstacles.add(idx)
 
-        
+        #Penalty for not moving enough
         if len(self.prev_positions) == self.prev_positions.maxlen:
             positions = np.array([[pos[0], pos[1]] for pos in self.prev_positions])
             movement = positions.max(axis=0) - positions.min(axis=0)
             movement_threshold = 0.5 
             if np.all(movement < movement_threshold):
-                reward -= 10 
+                reward -= 20 
 
+        #5. Incentivize stability and penalize excessive speeds
         if len(self.prev_positions) >= 2:
-            current_x = self.prev_positions[-1][0]
-            previous_x = self.prev_positions[-2][0]
-            delta_x = current_x - previous_x
+            velocity = self.car.body.linearVelocity[0]
+            reward += velocity * 0.5  
+            reward -= 0.1 * velocity**2 
 
-            reward_scale = 5
-
-            if delta_x > 0:
-                reward += delta_x * reward_scale
-                velocity = self.car.body.linearVelocity[0]
-                reward += velocity / 10.0  # Scala la ricompensa per la velocità
-                reward -= 0.1 * velocity**2
-            elif delta_x < 0:
-                reward += delta_x * reward_scale
-                reward -= 50
+        #6. Penalty for fall or end of episode
+        if self.done:
+            if hasattr(self, 'done_reason') and self.done_reason == 'hole':
+                reward -= 50  
+            else:
+                reward -= 100  
 
         return reward
 
@@ -334,6 +368,7 @@ class CarEnvironment(gym.Env):
         }
         
         self.modify_env(params)
+        self._create_ground_with_holes()
 
     def _should_add_obstacle(self):
         if not self.obstacles:

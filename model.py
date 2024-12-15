@@ -8,9 +8,9 @@ from collections import namedtuple, deque
 
 device = torch.device("mps" if torch.cuda.is_available() else "cpu")
 
-class PolicyNetwork(nn.Module):
+class QNetwork(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
-        super(PolicyNetwork, self).__init__()
+        super(QNetwork, self).__init__()
         self.model = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
@@ -75,7 +75,7 @@ class Q(nn.Module):
         output_dim = env.action_space.n
         self.lr = lr
         
-        self.network = PolicyNetwork(input_dim, hidden_dim, output_dim)
+        self.network = QNetwork(input_dim, hidden_dim, output_dim)
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=self.lr)
     
     def forward(self, x):

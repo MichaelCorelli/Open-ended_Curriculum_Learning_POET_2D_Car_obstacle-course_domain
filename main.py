@@ -18,7 +18,7 @@ def main(profile=False):
         epsilon_initial=0.5, 
         batch_size=64, 
         threshold_r=200,
-        render_during_training=True
+        render_during_training=False
     )
 
     theta_init_sd = agent.network.network.state_dict()
@@ -34,8 +34,8 @@ def main(profile=False):
         theta_init=theta_init_vec,
         alpha=0.1,
         noise_std=0.01,
-        T=10,
-        N_mutate=10,
+        T=50,
+        N_mutate=5,
         N_transfer=5,
         env_input_dim=env.observation_space.shape[0],
         hidden_dim=128,

@@ -1,1 +1,5 @@
 .venv/
+__pycache__/
+*.pyc
+DDQN_state_dict.pth
+train_mean_rewards.png

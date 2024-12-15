@@ -4,6 +4,7 @@ import pygame
 from env import CarEnvironment
 from utils import state_dict_to_vector, vector_to_state_dict
 from tqdm import tqdm
+from collections import deque
 
 BLACK = (0, 0, 0)
 
@@ -98,6 +99,7 @@ class POET:
         for E_child, theta_child in child_list:
             score = self._evaluate_agent_with_vector(E_child, theta_child)
             mean_reward = score['mean_reward']
+            print(f"Evaluating child: mean_reward = {mean_reward}, thresholds = [{self.threshold_c_min}, {self.threshold_c_max}]")
             if self.threshold_c_min <= mean_reward <= self.threshold_c_max:
                 res.append((E_child, theta_child))
 
@@ -157,7 +159,6 @@ class POET:
                     print(f"Not valid child_tuple format: {child_tuple}")
                     continue
 
-                self.envs.append((E_child, theta_child))
                 child_list.append(child_tuple)
 
         print(f"child_list: {child_list}")
@@ -191,6 +192,7 @@ class POET:
             theta_child = self.evaluate_candidates(theta_list, E_child, self.alpha, self.noise_std)
             if self.mc_satisfied([(E_child, theta_child)]):
                 EA_list.append((E_child, theta_child))
+                self.envs.append((E_child, theta_child))
                 admitted += 1
                 if admitted >= self.max_admitted:
                     break
@@ -205,15 +207,14 @@ class POET:
             self.remove_oldest(EA_list, num_removals)
         self.envs = EA_list.copy()
         
+        #Updating r_history with unique keys.
         for E, theta in EA_list:
-            key = (E, tuple(theta))
+            key = (id(E), tuple(theta))  #Use environment ID for unique key.
             if key not in self.r_history:
-                self.r_history[key] = []
+                self.r_history[key] = deque(maxlen=100)
             score = E.evaluate_agent(self.ddqn_agent, None)
             r_mean = score['mean_reward']
             self.r_history[key].append(r_mean)
-        self.update_threshold_c([r for rewards in self.r_history.values() for r in rewards])
-        self.update_threshold_el([r for rewards in self.r_history.values() for r in rewards])
 
         return EA_list
 
@@ -269,7 +270,8 @@ class POET:
         self.ddqn_agent.network.network.load_state_dict(current_state_dict)
 
         E_i = np.array(E_i)
-        gradient_estimation = np.sum(E_i[:, np.newaxis] * epsilon, axis=0)
+        baseline = np.mean(E_i)
+        gradient_estimation = np.sum((E_i - baseline)[:, np.newaxis] * epsilon, axis=0) #Avoid bias in gradient estimation
         theta_updated = theta_m_t + alpha * (1 / (self.n * noise_std)) * gradient_estimation
 
         C = theta_list + [theta_updated]
@@ -284,6 +286,7 @@ class POET:
 
         i_best = np.argmax(performances)
         best_theta = C[i_best]
+        print(f"evaluate_candidates: best_theta performance = {performances[i_best]}")        
 
         return best_theta
 
@@ -379,10 +382,9 @@ class POET:
 
         with tqdm(total=self.T, desc="POET Main Loop Progress") as pbar:
             for t in range(self.T):
+                self.update_environments(t)
                 if t >= 0 and t % self.N_mutate == 0:
                     EA_list = self.mutate_envs(EA_list)
-
-                self.update_environments(t)
 
                 M = len(EA_list)
                 for m in range(M):
@@ -401,9 +403,6 @@ class POET:
                     if key not in self.r_history:
                         self.r_history[key] = []
                     self.r_history[key].append(mean_reward)
-
-                    self.update_threshold_c(self.r_history[key])
-                    self.update_threshold_el(self.r_history[key])
                             
                     #theta_m_t_1 = theta_m_t + self.es_step(theta_m_t, E_m, self.alpha, self.noise_std)
                     updated_sd = self.ddqn_agent.network.network.state_dict()
@@ -417,7 +416,7 @@ class POET:
                             top_score = self._evaluate_agent_with_vector(E_m, theta_top)
                             current_score = self._evaluate_agent_with_vector(E_m, theta_m_t_1)
                             print(f"theta_top score: {top_score}, current score: {current_score}")
-                            if top_score > current_score:
+                            if top_score['mean_reward'] > current_score['mean_reward']:
                                 theta_m_t_1 = theta_top
 
                     EA_list[m] = (E_m, theta_m_t_1)
