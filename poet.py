@@ -325,8 +325,8 @@ class POET:
                     
                     if all(np.linalg.norm(np.array(p) - np.array(obs['params']['base_position'])) >= d_min for obs in E.obstacles):
                         obstacle_type = random.choice(["ramp", "hole", "bump"])
-                        width = random.uniform(3, 13)
-                        height = random.uniform(5, 20)
+                        width = random.uniform(1, 10)
+                        height = random.uniform(1, 13)
                         
                         if width <= 0 or height <= 0:
                             print(f"Not valid width and/or height -> set default value.")

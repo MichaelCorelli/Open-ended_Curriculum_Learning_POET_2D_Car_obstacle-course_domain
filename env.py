@@ -139,6 +139,15 @@ class CarEnvironment(gym.Env):
                     shapes=polygonShape(box=(segment_length / 2, 1))
                 )
                 self.add_body(ground_segment, GREEN)
+    
+    def _is_overlapping_with_existing_obstacles(self, x, y, width, height):
+        for obs in self.obstacles:
+            obs_x, obs_y = obs['params']['base_position']
+            obs_w, obs_h = obs['params']['size']
+            if (x < obs_x + obs_w) and (obs_x < x + width):
+                return True
+        return False
+
 
     def step(self, action):
         steering, acceleration = self.actions[action]
@@ -213,10 +222,14 @@ class CarEnvironment(gym.Env):
             })
 
         elif obstacle_type == "hole":
+            width = min(width, 3.0)
+            height = 1
+            if self._is_overlapping_with_existing_obstacles(x, y, width, height):
+                return
             self.obstacles.append({
                 'body': None,
                 'type': obstacle_type,
-                'params': params
+                'params': {"base_position": (x, y), "size": (width, height), "color": color, "obstacle_type": obstacle_type}
             })
 
         elif obstacle_type == "bump":
@@ -378,7 +391,9 @@ class CarEnvironment(gym.Env):
         if obstacle_type == "ramp":
             size = (random.uniform(2, 10), random.uniform(2, 5))
         elif obstacle_type == "hole":
-            size = (random.uniform(1, 5), 0.5)
+            size = (random.uniform(0.5, 3.5), 0.5)
+            if self._is_overlapping_with_existing_obstacles(new_obstacle_x, new_obstacle_y, size[0], size[1]):
+                return
         elif obstacle_type == "bump":
             size = (random.uniform(1, 4), random.uniform(0.5, 1.5))
 
