@@ -38,7 +38,7 @@ class POET:
         self.r_history = {}
         self.best_reward = -float('inf')
 
-    def update_threshold_c(self, r_history, window_size=5, range_val=1000.1):
+    def update_threshold_c(self, r_history, window_size=5, range_val=20000.0):
         if len(r_history) < window_size:
             r = r_history
         else:
@@ -334,25 +334,41 @@ class POET:
                     
                     if all(np.linalg.norm(np.array(p) - np.array(obs['params']['base_position'])) >= d_min for obs in E.obstacles):
                         obstacle_type = random.choice(["ramp", "hole", "bump"])
-                        width = width_init * difficulty_factor
-                        height = height_init * difficulty_factor
+                        if obstacle_type == "hole":
+                            width = 0.5 * difficulty_factor
+                            height = 1
+                            width = min(max(width, 1), 6)
+                            
+                            modified_env_params = {
+                                "base_position": p,
+                                "size": (width, height),
+                                "color": BLACK,
+                                "obstacle_type": obstacle_type
+                            }
+                            
+                            E.modify_env(modified_env_params)
+                            E.obstacles_config.append(modified_env_params)
+                            break
+                        else:    
+                            width = width_init * difficulty_factor
+                            height = height_init * difficulty_factor
 
-                        width = min(max(width, 3), 20)
-                        height = min(max(height, 5), 40)
-                        
-                        
-                        modified_env_params = {
-                            "base_position": p,
-                            "size": (width, height),
-                            "color": BLACK,
-                            "obstacle_type": obstacle_type
-                        }
-                        
-                        E.modify_env(modified_env_params)
-                        E.obstacles_config.append(modified_env_params)
-                        break
-                else:
-                    continue
+                            width = min(max(width, 3), 20)
+                            height = min(max(height, 5), 40)
+                            
+                            
+                            modified_env_params = {
+                                "base_position": p,
+                                "size": (width, height),
+                                "color": BLACK,
+                                "obstacle_type": obstacle_type
+                            }
+                            
+                            E.modify_env(modified_env_params)
+                            E.obstacles_config.append(modified_env_params)
+                            break
+                    else:
+                        continue
             
             reward = E.evaluate_agent(self.ddqn_agent, None)
             print(f"Reward: {reward}")
@@ -381,11 +397,10 @@ class POET:
                     self.ddqn_agent.env = E_m
                     print(f"Training agent on env: {m}")
                     self.ddqn_agent.train(e_max=100, gamma=0.99, frequency_update=10, frequency_sync=100)
+                    
+                    metrics = self.ddqn_agent.evaluate(E_m, ep_n=1, render=False, verbose=True, print_results=True)
 
-                    score = E_m.evaluate_agent(self.ddqn_agent, None)
-                    print(f"Score: {score}")
-
-                    mean_reward = score['mean_reward']
+                    mean_reward = metrics['mean_reward']
 
                     key = (E_m, tuple(theta_m_t))
                     if key not in self.r_history:

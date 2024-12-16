@@ -224,7 +224,7 @@ class DDQN:
         self.save()
         self.plot()
 
-    def evaluate(self, eval_env, ep_n=1, render=False, verbose=True):
+    def evaluate(self, eval_env, ep_n=1, render=False, verbose=True, print_results=False):
         self.network.network.eval()
         episode_rewards = []
         episode_steps = []
@@ -274,18 +274,22 @@ class DDQN:
             metrics["min_final_position"] = np.min(final_positions)
             metrics["max_final_position"] = np.max(final_positions)
 
-        if verbose:
+        if print_results:
             print("----- Evaluation Results -----")
+            print(f"Environment ID: {id(eval_env)}")
             print(f"Episodes: {ep_n}")
             print(f"Mean Reward: {mean_reward:.2f}")
             print(f"Std Reward: {std_reward:.2f}")
             print(f"Min/Max Reward: {min_reward:.2f}/{max_reward:.2f}")
             print(f"Mean Steps per Episode: {mean_steps:.2f} ± {std_steps:.2f}")
             if final_positions:
-                print(f"Final Position (X) - Mean: {metrics['mean_final_position']:.2f}, Min: {metrics['min_final_position']:.2f}, Max: {metrics['max_final_position']:.2f}")
+                print(f"Final Position (X) - Mean: {metrics['mean_final_position']:.2f}, "
+                    f"Min: {metrics['min_final_position']:.2f}, "
+                    f"Max: {metrics['max_final_position']:.2f}")
             print("--------------------------------")
 
         return metrics
+
 
     def save(self):
         

@@ -108,8 +108,8 @@ class CarEnvironment(gym.Env):
         self.add_body(self.car.wheel_front, BLACK)
         self.add_body(self.car.wheel_rear, BLACK)
         
-        ground = self.world.CreateStaticBody(position=(50, 0),
-                                             shapes=polygonShape(box=(50, 1)))
+        ground = self.world.CreateStaticBody(position=(50000, 0),
+                                             shapes=polygonShape(box=(50000, 1)))
         self.add_body(ground, GREEN)
         self.camera = (0, 0)
         
@@ -123,16 +123,17 @@ class CarEnvironment(gym.Env):
     
     def _create_ground_with_holes(self):
         ground_length = SCREEN_W / PPM  
-        segment_length = 1 
+        segment_length = 1
+        hole_intervals = []
+        for obs in self.obstacles:
+            if obs['type'] == 'hole':
+                hole_x, hole_width = obs['params']['base_position'][0], obs['params']['size'][0]
+                hole_intervals.append((hole_x, hole_x + hole_width))
+
         for i in range(int(ground_length / segment_length)):
             x = i * segment_length + 0.5 * segment_length
-            is_hole = False
-            for obs in self.obstacles:
-                if obs['type'] == 'hole':
-                    hole_x, hole_width = obs['params']['base_position'][0], obs['params']['size'][0]
-                    if hole_x - segment_length / 2 <= x <= hole_x + hole_width + segment_length / 2:
-                        is_hole = True
-                        break
+            is_hole = any(start <= x <= end for (start, end) in hole_intervals)
+
             if not is_hole:
                 ground_segment = self.world.CreateStaticBody(
                     position=(x, 0),
@@ -226,6 +227,7 @@ class CarEnvironment(gym.Env):
             height = 1
             if self._is_overlapping_with_existing_obstacles(x, y, width, height):
                 return
+            self._create_ground_with_holes()
             self.obstacles.append({
                 'body': None,
                 'type': obstacle_type,
@@ -391,7 +393,7 @@ class CarEnvironment(gym.Env):
         if obstacle_type == "ramp":
             size = (random.uniform(2, 10), random.uniform(2, 5))
         elif obstacle_type == "hole":
-            size = (random.uniform(0.5, 3.5), 0.5)
+            size = (random.uniform(0.5, 1.5), 0.5)
             if self._is_overlapping_with_existing_obstacles(new_obstacle_x, new_obstacle_y, size[0], size[1]):
                 return
         elif obstacle_type == "bump":
