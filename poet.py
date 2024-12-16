@@ -38,7 +38,7 @@ class POET:
         self.r_history = {}
         self.best_reward = -float('inf')
 
-    def update_threshold_c(self, r_history, window_size=5, range_val=50.1):
+    def update_threshold_c(self, r_history, window_size=5, range_val=1000.1):
         if len(r_history) < window_size:
             r = r_history
         else:
@@ -305,7 +305,7 @@ class POET:
                 E = CarEnvironment()
                 self.envs[i] = (E, theta)
 
-            score = E.evaluate_agent(self.ddqn_agent, theta)
+            score = E.evaluate_agent(self.ddqn_agent, vector_to_state_dict(theta, self.reference_state_dict))
             mean_reward = score['mean_reward']
 
             threshold_difficulty_incr = min(1, threshold_incr_init + 0.15 * (t / 1000))

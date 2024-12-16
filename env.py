@@ -122,7 +122,7 @@ class CarEnvironment(gym.Env):
         return self._get_state(), {}
     
     def _create_ground_with_holes(self):
-        ground_length = 100  
+        ground_length = SCREEN_W / PPM  
         segment_length = 1 
         for i in range(int(ground_length / segment_length)):
             x = i * segment_length + 0.5 * segment_length
