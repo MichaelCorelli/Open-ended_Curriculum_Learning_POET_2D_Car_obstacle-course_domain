@@ -146,7 +146,7 @@ class POET:
             for _ in range(max_children // len(parent_list)):
                 
                 E_child = E_parent.clone()  
-                E_child.mutate_environment() 
+                E_child.mutate_environment()
                 
                 theta_parent_sd = vector_to_state_dict(theta_parent, self.reference_state_dict)
                 score = E_child.evaluate_agent(self.ddqn_agent, theta_parent_sd)
@@ -209,7 +209,7 @@ class POET:
         
         #Updating r_history with unique keys.
         for E, theta in EA_list:
-            key = (id(E), tuple(theta))  #Use environment ID for unique key.
+            key = (id(E), tuple(theta))
             if key not in self.r_history:
                 self.r_history[key] = deque(maxlen=100)
             score = E.evaluate_agent(self.ddqn_agent, None)
@@ -318,15 +318,14 @@ class POET:
             difficulty_factor = min(difficulty_max, max(1, difficulty_factor))
 
             obstacles_n = int(difficulty_factor * 2)
-            existing_p = E.obstacles if hasattr(E, "obstacles") else []
 
             for _ in range(obstacles_n):
                 for _ in range(i_max):
                     p = (random.uniform(15, 60), random.uniform(2, 25))
                     
-                    if all(np.linalg.norm(np.array(p) - np.array(obs['params']['base_position'])) >= d_min for obs in existing_p):
+                    if all(np.linalg.norm(np.array(p) - np.array(obs['params']['base_position'])) >= d_min for obs in E.obstacles):
                         obstacle_type = random.choice(["ramp", "hole", "bump"])
-                        width = random.uniform(6, 10)
+                        width = random.uniform(3, 13)
                         height = random.uniform(5, 20)
                         
                         if width <= 0 or height <= 0:
@@ -341,13 +340,14 @@ class POET:
                             "obstacle_type": obstacle_type
                         }
                         E.modify_env(modified_env_params)
+                        E.obstacles_config.append(modified_env_params)
                         break
                 else:
                     continue
 
             obstacle_type = random.choice(["ramp", "bump", "hole"])
 
-            width = random.uniform(6, 10)
+            width = random.uniform(3, 13)
             height = random.uniform(5, 20)
 
             if width <= 0 or height <= 0:
@@ -364,7 +364,7 @@ class POET:
 
             E.modify_env(modified_env_params)
 
-            E.obstacles = existing_p
+            E.obstacles_config.append(modified_env_params)
             
             reward = E.evaluate_agent(self.ddqn_agent, None)
             print(f"Reward: {reward}")

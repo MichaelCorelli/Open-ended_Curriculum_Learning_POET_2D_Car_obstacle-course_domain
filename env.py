@@ -44,6 +44,11 @@ class CarEnvironment(gym.Env):
         self.world = world(gravity=(0, -15), doSleep=True) #Increased gravity for car stability
         self.bodies = []
         self.obstacles = []
+        self.obstacles_config = [
+            {"base_position": (20, 1), "size": (1, 0.7), "color": BLACK, "obstacle_type": 'ramp'},
+            {"base_position": (40, 1), "size": (1, 1), "color": BLACK, "obstacle_type": 'hole'},
+            {"base_position": (60, 1), "size": (2, 1), "color": BLACK, "obstacle_type": 'bump'}
+        ]
         self.step_count = 0
         self.max_steps = 1000
         self.passed_obstacles = set()
@@ -93,26 +98,27 @@ class CarEnvironment(gym.Env):
     def reset(self):
         self.world = world(gravity=(0, -15), doSleep=True)
         self.bodies = []
-        self.obstacles = []
         self.passed_obstacles = set()
         self.prev_positions = deque(maxlen=30)
+        self.done = False
+        self.step_count = 0
+        
         self.car = Car(self.world, position=(10, 2.2))
         self.add_body(self.car.body, BLACK)
         self.add_body(self.car.wheel_front, BLACK)
         self.add_body(self.car.wheel_rear, BLACK)
+        
         ground = self.world.CreateStaticBody(position=(50, 0),
                                              shapes=polygonShape(box=(50, 1)))
         self.add_body(ground, GREEN)
         self.camera = (0, 0)
-        self.done = False
-        self.step_count = 0
-
-        self.modify_env({"base_position":(20, 1), "size":(1, 0.7), "color": BLACK, "obstacle_type":'ramp'})
-        self.modify_env({"base_position":(40, 1), "size":(1, 15), "color":BLACK, "obstacle_type":'hole'})
-        self.modify_env({"base_position":(60, 1), "size":(2, 1), "color":BLACK, "obstacle_type":'bump'})
         
-        self._create_ground_with_holes()
+        self.obstacles = []
+        for obs_params in self.obstacles_config:
+            self.modify_env(obs_params)
 
+        self._create_ground_with_holes()
+        
         return self._get_state(), {}
     
     def _create_ground_with_holes(self):
@@ -162,12 +168,6 @@ class CarEnvironment(gym.Env):
 
     def render(self, mode='human'):
         self.screen.blit(self.background_texture, (0,0))
-        ground_rect = pygame.Rect(0 - self.camera[0],
-                              SCREEN_H - (1 * PPM) - self.camera[1],
-                              SCREEN_W,
-                              20)
-        pygame.draw.rect(self.screen, GREEN, ground_rect)
-        
         for body, color in self.bodies:
             for fixture in body.fixtures:
                 shape = fixture.shape
@@ -184,16 +184,6 @@ class CarEnvironment(gym.Env):
                     wheel_y = SCREEN_H - (wheel_pos[1] * PPM) - self.camera[1] - rotated_wheel.get_height() / 2
                     self.screen.blit(rotated_wheel, (wheel_x, wheel_y))
                     
-        for obs in self.obstacles:
-            if obs['type'] == "hole":
-                x, y = obs['params']['base_position']
-                width = obs['params']['size'][0]
-                hole_rect = pygame.Rect(x * PPM - self.camera[0],
-                                    SCREEN_H - (y + 1) * PPM - self.camera[1],
-                                    width * PPM,
-                                    0.5 * PPM)
-                pygame.draw.rect(self.screen, WHITE, hole_rect)
-        
         pygame.display.flip()
         self.clock.tick(FPS)
 
@@ -228,7 +218,6 @@ class CarEnvironment(gym.Env):
                 'type': obstacle_type,
                 'params': params
             })
-            self._create_ground_with_holes()
 
         elif obstacle_type == "bump":
             vertices = [(0, 0), (width, 0), (width / 2, height)]
@@ -249,10 +238,8 @@ class CarEnvironment(gym.Env):
     def clone(self):
         new_env = CarEnvironment.__new__(CarEnvironment)
         CarEnvironment.__init__(new_env)
-
-        for obstacle in self.obstacles:
-            params = obstacle['params']
-            new_env.modify_env(params)
+        new_env.obstacles_config = [dict(p) for p in self.obstacles_config]
+        new_env.reset()
 
         new_env.car = Car(new_env.world, position=self.car.body.position)
         new_env.add_body(new_env.car.body, BLACK)
@@ -264,7 +251,6 @@ class CarEnvironment(gym.Env):
         new_env.camera = self.camera
         new_env.prev_positions = deque(self.prev_positions, maxlen=30)
         new_env.passed_obstacles = set(self.passed_obstacles)
-
         return new_env
 
     def _get_state(self):
@@ -367,8 +353,8 @@ class CarEnvironment(gym.Env):
             "obstacle_type": obstacle_type
         }
         
+        self.obstacles_config.append(params)
         self.modify_env(params)
-        self._create_ground_with_holes()
 
     def _should_add_obstacle(self):
         if not self.obstacles:
