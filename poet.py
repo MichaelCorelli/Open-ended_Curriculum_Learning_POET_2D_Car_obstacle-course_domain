@@ -321,7 +321,7 @@ class POET:
 
             for _ in range(obstacles_n):
                 for _ in range(i_max):
-                    p = (random.uniform(15, 60), random.uniform(2, 25))
+                    p = (random.uniform(15, 60), 1)
                     
                     if all(np.linalg.norm(np.array(p) - np.array(obs['params']['base_position'])) >= d_min for obs in E.obstacles):
                         obstacle_type = random.choice(["ramp", "hole", "bump"])
@@ -344,27 +344,6 @@ class POET:
                         break
                 else:
                     continue
-
-            obstacle_type = random.choice(["ramp", "bump", "hole"])
-
-            width = random.uniform(3, 13)
-            height = random.uniform(5, 20)
-
-            if width <= 0 or height <= 0:
-                print(f"Not valid width and/or height -> set default value.")
-                width = 0.2
-                height = 0.2
-
-            modified_env_params = {
-                "base_position": (random.uniform(10, 50), 1),
-                "size": (width, height),
-                "color": BLACK,
-                "obstacle_type": obstacle_type
-            }
-
-            E.modify_env(modified_env_params)
-
-            E.obstacles_config.append(modified_env_params)
             
             reward = E.evaluate_agent(self.ddqn_agent, None)
             print(f"Reward: {reward}")
