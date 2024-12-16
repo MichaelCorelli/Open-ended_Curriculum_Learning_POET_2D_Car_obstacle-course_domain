@@ -108,9 +108,6 @@ class CarEnvironment(gym.Env):
         self.add_body(self.car.wheel_front, BLACK)
         self.add_body(self.car.wheel_rear, BLACK)
         
-        ground = self.world.CreateStaticBody(position=(50000, 0),
-                                             shapes=polygonShape(box=(50000, 1)))
-        self.add_body(ground, GREEN)
         self.camera = (0, 0)
         
         self.obstacles = []
@@ -122,7 +119,7 @@ class CarEnvironment(gym.Env):
         return self._get_state(), {}
     
     def _create_ground_with_holes(self):
-        ground_length = SCREEN_W / PPM  
+        ground_length = SCREEN_W / PPM * 40
         segment_length = 1
         hole_intervals = []
         for obs in self.obstacles:
@@ -227,7 +224,6 @@ class CarEnvironment(gym.Env):
             height = 1
             if self._is_overlapping_with_existing_obstacles(x, y, width, height):
                 return
-            self._create_ground_with_holes()
             self.obstacles.append({
                 'body': None,
                 'type': obstacle_type,
