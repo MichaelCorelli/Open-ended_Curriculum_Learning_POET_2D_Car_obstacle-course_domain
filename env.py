@@ -41,7 +41,7 @@ class CarEnvironment(gym.Env):
         self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
         pygame.display.set_caption("POET 2D Car Simulation")
         self.clock = pygame.time.Clock()
-        self.world = world(gravity=(0, -15), doSleep=True) #Increased gravity for car stability
+        self.world = world(gravity=(0, -17), doSleep=True) #Increased gravity for car stability
         self.bodies = []
         self.obstacles = []
         self.obstacles_config = [
@@ -96,7 +96,7 @@ class CarEnvironment(gym.Env):
         self.reset()
 
     def reset(self):
-        self.world = world(gravity=(0, -15), doSleep=True)
+        self.world = world(gravity=(0, -17), doSleep=True)
         self.bodies = []
         self.passed_obstacles = set()
         self.prev_positions = deque(maxlen=30)

@@ -294,20 +294,29 @@ class POET:
         threshold_incr_init = 0.8
         threshold_decr_init = 0.4
         rate_init = 0.1
-        difficulty_max_init = 2.0
+        max_difficulty_init = 1.5
+        
+        width_init = 3
+        height_init = 5
+        
 
         for i, (E, theta) in enumerate(self.envs):
             if E is None:
                 E = CarEnvironment()
                 self.envs[i] = (E, theta)
 
-            score = E.evaluate_agent(self.ddqn_agent, None)
+            score = E.evaluate_agent(self.ddqn_agent, theta)
             mean_reward = score['mean_reward']
 
             threshold_difficulty_incr = min(1, threshold_incr_init + 0.15 * (t / 1000))
             threshold_difficulty_decr = max(0, threshold_decr_init - 0.15 * (t / 1000))
             rate_difficulty = rate_init * (1 + 0.02 * t)
-            difficulty_max = min(5.0, difficulty_max_init + 0.003 * t)
+            
+            difficulty_max = min(5.0, max_difficulty_init + 0.003 * t)
+            max_width = width_init * difficulty_max
+            max_height = height_init * difficulty_max
+
+            d_min = max(d_min, (max_width**2 + max_height**2)**0.5)
 
             difficulty_factor = 1
             if mean_reward >= threshold_difficulty_incr:
@@ -315,7 +324,7 @@ class POET:
             elif mean_reward <= threshold_difficulty_decr:
                 difficulty_factor -= rate_difficulty * (threshold_difficulty_decr - mean_reward)
 
-            difficulty_factor = min(difficulty_max, max(1, difficulty_factor))
+            difficulty_factor = min(max_difficulty_init, max(0.5, difficulty_factor))
 
             obstacles_n = int(difficulty_factor * 2)
 
@@ -325,13 +334,12 @@ class POET:
                     
                     if all(np.linalg.norm(np.array(p) - np.array(obs['params']['base_position'])) >= d_min for obs in E.obstacles):
                         obstacle_type = random.choice(["ramp", "hole", "bump"])
-                        width = random.uniform(1, 10)
-                        height = random.uniform(1, 13)
+                        width = width_init * difficulty_factor
+                        height = height_init * difficulty_factor
+
+                        width = min(max(width, 3), 20)
+                        height = min(max(height, 5), 40)
                         
-                        if width <= 0 or height <= 0:
-                            print(f"Not valid width and/or height -> set default value.")
-                            width = 0.2
-                            height = 0.2
                         
                         modified_env_params = {
                             "base_position": p,
@@ -339,6 +347,7 @@ class POET:
                             "color": BLACK,
                             "obstacle_type": obstacle_type
                         }
+                        
                         E.modify_env(modified_env_params)
                         E.obstacles_config.append(modified_env_params)
                         break
