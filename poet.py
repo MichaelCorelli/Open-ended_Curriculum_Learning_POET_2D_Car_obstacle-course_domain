@@ -330,37 +330,38 @@ class POET:
                 height = min(height, 40)
                 p = (max_x + random.uniform(width, 20), 1)
 
-                obstacle_type = random.choice(["ramp", "hole", "bump"])
-                if obstacle_type == "hole":
-                    height = 1
-                    width = min(width, 6)
+                if not self.check_distance(p, E.obstacles_config):
+                    obstacle_type = random.choice(["ramp", "hole", "bump"])
+                    if obstacle_type == "hole":
+                        height = 1
+                        width = min(width, 6)
 
-                    modified_env_params = {
-                        "base_position": p,
-                        "size": (width, height),
-                        "color": BLACK,
-                        "obstacle_type": obstacle_type
-                    }
+                        modified_env_params = {
+                            "base_position": p,
+                            "size": (width, height),
+                            "color": BLACK,
+                            "obstacle_type": obstacle_type
+                        }
 
-                    E.modify_env(modified_env_params)
-                    E.obstacles_config.append(modified_env_params)
-                    #print(f"New hole: {E.obstacles_config}")
-                    break
+                        E.modify_env(modified_env_params)
+                        E.obstacles_config.append(modified_env_params)
+                        print(f"New hole: {E.obstacles_config}")
+                        break
+                    else:
+
+                        modified_env_params = {
+                            "base_position": p,
+                            "size": (width, height),
+                            "color": BLACK,
+                            "obstacle_type": obstacle_type
+                        }
+
+                        E.modify_env(modified_env_params)
+                        E.obstacles_config.append(modified_env_params)
+                        print(f"New ramp or bump: {E.obstacles_config}")
+                        break
                 else:
-
-                    modified_env_params = {
-                        "base_position": p,
-                        "size": (width, height),
-                        "color": BLACK,
-                        "obstacle_type": obstacle_type
-                    }
-
-                    E.modify_env(modified_env_params)
-                    E.obstacles_config.append(modified_env_params)
-                    #print(f"New ramp or bump: {E.obstacles_config}")
-                    break
-            else:
-                continue
+                    continue
 
         reward = E.evaluate_agent(self.ddqn_agent, None)
         #print(f"Reward: {reward}")
@@ -372,6 +373,16 @@ class POET:
 
         self.update_threshold_c(self.r_history[key])
         self.update_threshold_el(self.r_history[key])
+
+    def check_distance(self, p, obstacles_config):
+        for obstacle in obstacles_config:
+            existing_position = obstacle['base_position']
+
+            distance = p[0] - existing_position[0]
+            if distance < 20:
+                return False
+
+        return True
 
     def main_loop(self):
         EA_list = [(self.E_init, self.theta_init)]
