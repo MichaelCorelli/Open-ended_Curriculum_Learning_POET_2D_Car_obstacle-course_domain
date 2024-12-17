@@ -291,7 +291,7 @@ class POET:
 
         return best_theta
 
-    def update_environments(self, E, theta, t, i_max = 100):
+    def update_environments(self, E, theta, t, i_max = 150):
         threshold_incr_init = 0.8
         threshold_decr_init = 0.4
         rate_init = 0.1
@@ -328,9 +328,9 @@ class POET:
                 height = height_init * difficulty_factor
                 width = min(width, 20)
                 height = min(height, 40)
-                p = (max_x + random.uniform(width, 20), 1)
+                p = (max_x + random.uniform(width, 30), 1)
 
-                if not self.check_distance(p, E.obstacles_config):
+                if self.check_distance(p, E.obstacles_config):
                     obstacle_type = random.choice(["ramp", "hole", "bump"])
                     if obstacle_type == "hole":
                         height = 1
