@@ -319,46 +319,48 @@ class POET:
 
         for _ in range(obstacles_n):
             for _ in range(i_max):
-                p = (random.uniform(15, 60), 1)
-
-                if not self.check_distance(p, E.obstacles_config):
-                    obstacle_type = random.choice(["ramp", "hole", "bump"])
-                    if obstacle_type == "hole":
-                        width = 0.2 * difficulty_factor
-                        height = 1
-                        width = min(width, 6)
-
-                        modified_env_params = {
-                            "base_position": p,
-                            "size": (width, height),
-                            "color": BLACK,
-                            "obstacle_type": obstacle_type
-                        }
-
-                        E.modify_env(modified_env_params)
-                        E.obstacles_config.append(modified_env_params)
-                        #print(f"New hole: {E.obstacles_config}")
-                        break
-                    else:
-                        width = width_init * difficulty_factor
-                        height = height_init * difficulty_factor
-
-                        width = min(width, 20)
-                        height = min(height, 40)
-
-                        modified_env_params = {
-                            "base_position": p,
-                            "size": (width, height),
-                            "color": BLACK,
-                            "obstacle_type": obstacle_type
-                        }
-
-                        E.modify_env(modified_env_params)
-                        E.obstacles_config.append(modified_env_params)
-                        #print(f"New ramp or bump: {E.obstacles_config}")
-                        break
+                if E.obstacles_config:
+                    max_x = max(obstacle['base_position'][0] for obstacle in E.obstacles_config)
                 else:
-                    continue
+                    max_x = 0
+
+                width = width_init * difficulty_factor
+                height = height_init * difficulty_factor
+                width = min(width, 20)
+                height = min(height, 40)
+                p = (max_x + random.uniform(width, 20), 1)
+
+                obstacle_type = random.choice(["ramp", "hole", "bump"])
+                if obstacle_type == "hole":
+                    height = 1
+                    width = min(width, 6)
+
+                    modified_env_params = {
+                        "base_position": p,
+                        "size": (width, height),
+                        "color": BLACK,
+                        "obstacle_type": obstacle_type
+                    }
+
+                    E.modify_env(modified_env_params)
+                    E.obstacles_config.append(modified_env_params)
+                    print(f"New hole: {E.obstacles_config}")
+                    break
+                else:
+
+                    modified_env_params = {
+                        "base_position": p,
+                        "size": (width, height),
+                        "color": BLACK,
+                        "obstacle_type": obstacle_type
+                    }
+
+                    E.modify_env(modified_env_params)
+                    E.obstacles_config.append(modified_env_params)
+                    print(f"New ramp or bump: {E.obstacles_config}")
+                    break
+            else:
+                continue
 
         reward = E.evaluate_agent(self.ddqn_agent, None)
         #print(f"Reward: {reward}")
@@ -370,21 +372,6 @@ class POET:
 
         self.update_threshold_c(self.r_history[key])
         self.update_threshold_el(self.r_history[key])
-
-
-    def check_distance(self, p, obstacles_config):
-        for obstacle in obstacles_config:
-            existing_position = obstacle['base_position']
-            
-            distance = p[0] - existing_position[0]
-
-            max_width = 20
-
-            min_distance_required = max_width + 20
-            if distance < min_distance_required:
-                return False
-
-        return True
 
     def main_loop(self):
         EA_list = [(self.E_init, self.theta_init)]

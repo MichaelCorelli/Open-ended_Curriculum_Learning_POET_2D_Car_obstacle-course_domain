@@ -46,8 +46,8 @@ class CarEnvironment(gym.Env):
         self.obstacles = []
         self.obstacles_config = [
             {"base_position": (20, 1), "size": (1, 0.7), "color": BLACK, "obstacle_type": 'ramp'},
-            {"base_position": (40, 1), "size": (1, 1), "color": BLACK, "obstacle_type": 'hole'},
-            {"base_position": (60, 1), "size": (2, 1), "color": BLACK, "obstacle_type": 'bump'}
+            {"base_position": (25, 1), "size": (1, 1), "color": BLACK, "obstacle_type": 'hole'},
+            {"base_position": (30, 1), "size": (2, 1), "color": BLACK, "obstacle_type": 'bump'}
         ]
         self.step_count = 0
         self.max_steps = 1000
