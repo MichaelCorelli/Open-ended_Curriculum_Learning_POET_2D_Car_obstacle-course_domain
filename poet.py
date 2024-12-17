@@ -344,7 +344,7 @@ class POET:
 
                     E.modify_env(modified_env_params)
                     E.obstacles_config.append(modified_env_params)
-                    print(f"New hole: {E.obstacles_config}")
+                    #print(f"New hole: {E.obstacles_config}")
                     break
                 else:
 
@@ -357,7 +357,7 @@ class POET:
 
                     E.modify_env(modified_env_params)
                     E.obstacles_config.append(modified_env_params)
-                    print(f"New ramp or bump: {E.obstacles_config}")
+                    #print(f"New ramp or bump: {E.obstacles_config}")
                     break
             else:
                 continue
