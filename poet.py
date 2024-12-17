@@ -76,7 +76,7 @@ class POET:
 
     def eligible_to_reproduce(self, E, theta):
         score = self._evaluate_agent_with_vector(E, theta)
-        print(f"Score: {score}, Threshold: {self.threshold_el}")
+        #print(f"Score: {score}, Threshold: {self.threshold_el}")
         mean_reward = score['mean_reward']
 
         if mean_reward > self.best_reward:
@@ -99,7 +99,7 @@ class POET:
         for E_child, theta_child in child_list:
             score = self._evaluate_agent_with_vector(E_child, theta_child)
             mean_reward = score['mean_reward']
-            print(f"Evaluating child: mean_reward = {mean_reward}, thresholds = [{self.threshold_c_min}, {self.threshold_c_max}]")
+            #print(f"Evaluating child: mean_reward = {mean_reward}, thresholds = [{self.threshold_c_min}, {self.threshold_c_max}]")
             if self.threshold_c_min <= mean_reward <= self.threshold_c_max:
                 res.append((E_child, theta_child))
 
@@ -181,11 +181,11 @@ class POET:
                 continue
 
         child_list = self.env_reproduce(parent_list, self.max_children)
-        print("child_list after env_reproduce", child_list)
+        #print("child_list after env_reproduce", child_list)
         child_list = self.mc_satisfied(child_list)
-        print("child_list after mc_satisfied", child_list)
+        #print("child_list after mc_satisfied", child_list)
         child_list = self.rank_by_novelty(child_list)
-        print("child_list after rank_by_novelty", child_list)
+        #print("child_list after rank_by_novelty", child_list)
 
         theta_list = [theta_m for _, theta_m in EA_list]
         admitted = 0
@@ -287,7 +287,7 @@ class POET:
 
         i_best = np.argmax(performances)
         best_theta = C[i_best]
-        print(f"evaluate_candidates: best_theta performance = {performances[i_best]}")        
+        #print(f"evaluate_candidates: best_theta performance = {performances[i_best]}")        
 
         return best_theta
 
@@ -345,7 +345,7 @@ class POET:
 
                         E.modify_env(modified_env_params)
                         E.obstacles_config.append(modified_env_params)
-                        print(f"New hole: {E.obstacles_config}")
+                        #print(f"New hole: {E.obstacles_config}")
                         break
                     else:
 
@@ -358,7 +358,7 @@ class POET:
 
                         E.modify_env(modified_env_params)
                         E.obstacles_config.append(modified_env_params)
-                        print(f"New ramp or bump: {E.obstacles_config}")
+                        #print(f"New ramp or bump: {E.obstacles_config}")
                         break
                 else:
                     continue

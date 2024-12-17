@@ -23,7 +23,7 @@ def main(profile=False):
 
     theta_init_sd = agent.network.network.state_dict()
     theta_init_vec = state_dict_to_vector(theta_init_sd)
-    print(f"Initialized theta vector length: {len(theta_init_vec)}")
+    #print(f"Initialized theta vector length: {len(theta_init_vec)}")
     E_init = env
 
     # Initialize POET
