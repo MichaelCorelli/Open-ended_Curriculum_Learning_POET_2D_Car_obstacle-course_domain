@@ -146,7 +146,7 @@ class POET:
             for _ in range(max_children // len(parent_list)):
                 
                 E_child = E_parent.clone()  
-                E_child.mutate_environment()
+                self.update_environments(E_child, theta_parent, t = 0)
                 
                 theta_parent_sd = vector_to_state_dict(theta_parent, self.reference_state_dict)
                 score = E_child.evaluate_agent(self.ddqn_agent, theta_parent_sd)
@@ -290,103 +290,109 @@ class POET:
 
         return best_theta
 
-    def update_environments(self, t, d_min=10, i_max=100):
+    def update_environments(self, E, theta, t, i_max = 100):
         threshold_incr_init = 0.8
         threshold_decr_init = 0.4
         rate_init = 0.1
         max_difficulty_init = 1.5
-        
-        width_init = 3
-        height_init = 5
-        
 
-        for i, (E, theta) in enumerate(self.envs):
-            if E is None:
-                E = CarEnvironment()
-                self.envs[i] = (E, theta)
+        width_init = 0.2
+        height_init = 0.3
 
-            score = E.evaluate_agent(self.ddqn_agent, vector_to_state_dict(theta, self.reference_state_dict))
-            mean_reward = score['mean_reward']
+        score = E.evaluate_agent(self.ddqn_agent, vector_to_state_dict(theta, self.reference_state_dict))
+        mean_reward = score['mean_reward']
 
-            threshold_difficulty_incr = min(1, threshold_incr_init + 0.15 * (t / 1000))
-            threshold_difficulty_decr = max(0, threshold_decr_init - 0.15 * (t / 1000))
-            rate_difficulty = rate_init * (1 + 0.02 * t)
-            
-            difficulty_max = min(5.0, max_difficulty_init + 0.003 * t)
-            max_width = width_init * difficulty_max
-            max_height = height_init * difficulty_max
+        threshold_difficulty_incr = min(1, threshold_incr_init + 0.15 * (t / 1000))
+        threshold_difficulty_decr = max(0, threshold_decr_init - 0.15 * (t / 1000))
+        rate_difficulty = rate_init * (1 + 0.02 * t)
 
-            d_min = max(d_min, (max_width**2 + max_height**2)**0.5)
+        difficulty_factor = 1
+        if mean_reward >= threshold_difficulty_incr:
+            difficulty_factor += rate_difficulty * (mean_reward - threshold_difficulty_incr)
+        elif mean_reward <= threshold_difficulty_decr:
+            difficulty_factor -= rate_difficulty * (threshold_difficulty_decr - mean_reward)
 
-            difficulty_factor = 1
-            if mean_reward >= threshold_difficulty_incr:
-                difficulty_factor += rate_difficulty * (mean_reward - threshold_difficulty_incr)
-            elif mean_reward <= threshold_difficulty_decr:
-                difficulty_factor -= rate_difficulty * (threshold_difficulty_decr - mean_reward)
+        difficulty_factor = min(max_difficulty_init, max(0.5, difficulty_factor))
 
-            difficulty_factor = min(max_difficulty_init, max(0.5, difficulty_factor))
+        obstacles_n = int(difficulty_factor * 2)
 
-            obstacles_n = int(difficulty_factor * 2)
+        for _ in range(obstacles_n):
+            for _ in range(i_max):
+                p = (random.uniform(15, 60), 1)
 
-            for _ in range(obstacles_n):
-                for _ in range(i_max):
-                    p = (random.uniform(15, 60), 1)
-                    
-                    if all(np.linalg.norm(np.array(p) - np.array(obs['params']['base_position'])) >= d_min for obs in E.obstacles):
-                        obstacle_type = random.choice(["ramp", "hole", "bump"])
-                        if obstacle_type == "hole":
-                            width = 0.5 * difficulty_factor
-                            height = 1
-                            width = min(max(width, 1), 6)
-                            
-                            modified_env_params = {
-                                "base_position": p,
-                                "size": (width, height),
-                                "color": BLACK,
-                                "obstacle_type": obstacle_type
-                            }
-                            
-                            E.modify_env(modified_env_params)
-                            E.obstacles_config.append(modified_env_params)
-                            break
-                        else:    
-                            width = width_init * difficulty_factor
-                            height = height_init * difficulty_factor
+                if not self.check_distance(p, E.obstacles_config):
+                    obstacle_type = random.choice(["ramp", "hole", "bump"])
+                    if obstacle_type == "hole":
+                        width = 0.2 * difficulty_factor
+                        height = 1
+                        width = min(width, 6)
 
-                            width = min(max(width, 3), 20)
-                            height = min(max(height, 5), 40)
-                            
-                            
-                            modified_env_params = {
-                                "base_position": p,
-                                "size": (width, height),
-                                "color": BLACK,
-                                "obstacle_type": obstacle_type
-                            }
-                            
-                            E.modify_env(modified_env_params)
-                            E.obstacles_config.append(modified_env_params)
-                            break
+                        modified_env_params = {
+                            "base_position": p,
+                            "size": (width, height),
+                            "color": BLACK,
+                            "obstacle_type": obstacle_type
+                        }
+
+                        E.modify_env(modified_env_params)
+                        E.obstacles_config.append(modified_env_params)
+                        print(f"New hole: {E.obstacles_config}")
+                        break
                     else:
-                        continue
+                        width = width_init * difficulty_factor
+                        height = height_init * difficulty_factor
+
+                        width = min(width, 20)
+                        height = min(height, 40)
+
+                        modified_env_params = {
+                            "base_position": p,
+                            "size": (width, height),
+                            "color": BLACK,
+                            "obstacle_type": obstacle_type
+                        }
+
+                        E.modify_env(modified_env_params)
+                        E.obstacles_config.append(modified_env_params)
+                        print(f"New ramp or bump: {E.obstacles_config}")
+                        break
+                else:
+                    continue
+
+        reward = E.evaluate_agent(self.ddqn_agent, None)
+        print(f"Reward: {reward}")
+
+        key = (E, tuple(theta))
+        if key not in self.r_history:
+            self.r_history[key] = []
+        self.r_history[key].append(mean_reward)
+
+        self.update_threshold_c(self.r_history[key])
+        self.update_threshold_el(self.r_history[key])
+
+
+    def check_distance(self, p, obstacles_config):
+        for obstacle in obstacles_config:
+            existing_position = obstacle['base_position']
             
-            reward = E.evaluate_agent(self.ddqn_agent, None)
-            print(f"Reward: {reward}")
+            distance = p[0] - existing_position[0]
+            print(distance)
 
-            key = (E, tuple(theta))
-            if key not in self.r_history:
-                self.r_history[key] = []
-            self.r_history[key].append(mean_reward)
+            max_width = 20
 
-            self.update_threshold_c(self.r_history[key])
-            self.update_threshold_el(self.r_history[key])
+            min_distance_required = max_width + 5
+            if distance < min_distance_required:
+                return False
+
+        return True
 
     def main_loop(self):
         EA_list = [(self.E_init, self.theta_init)]
 
         with tqdm(total=self.T, desc="POET Main Loop Progress") as pbar:
             for t in range(self.T):
-                self.update_environments(t)
+                for E, theta in EA_list:
+                    self.update_environments(E, theta, t)
                 if t >= 0 and t % self.N_mutate == 0:
                     EA_list = self.mutate_envs(EA_list)
 

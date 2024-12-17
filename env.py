@@ -349,24 +349,6 @@ class CarEnvironment(gym.Env):
 
         return reward
 
-    
-    def mutate_environment(self):
-        new_obstacle_x = random.uniform(10, 50)  
-        new_obstacle_y = 1                      
-        obstacle_type = random.choice(["ramp", "hole", "bump"])  
-        width = random.uniform(2, 8)            
-        height = random.uniform(1, 5)  
-        
-        params = {
-            "base_position": (new_obstacle_x, new_obstacle_y),
-            "size": (width, height),
-            "color": BLACK,
-            "obstacle_type": obstacle_type
-        }
-        
-        self.obstacles_config.append(params)
-        self.modify_env(params)
-
     def _should_add_obstacle(self):
         if not self.obstacles:
             return False
