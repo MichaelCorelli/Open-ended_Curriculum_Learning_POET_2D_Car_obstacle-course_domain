@@ -276,12 +276,10 @@ class DDQN:
 
         if print_results:
             print("----- Evaluation Results -----")
-            print(f"Environment ID: {id(eval_env)}")
             print(f"Episodes: {ep_n}")
             print(f"Mean Reward: {mean_reward:.2f}")
             print(f"Std Reward: {std_reward:.2f}")
             print(f"Min/Max Reward: {min_reward:.2f}/{max_reward:.2f}")
-            print(f"Mean Steps per Episode: {mean_steps:.2f} ± {std_steps:.2f}")
             if final_positions:
                 print(f"Final Position (X) - Mean: {metrics['mean_final_position']:.2f}, "
                     f"Min: {metrics['min_final_position']:.2f}, "

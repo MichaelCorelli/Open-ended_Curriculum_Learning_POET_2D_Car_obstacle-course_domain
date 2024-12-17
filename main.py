@@ -18,7 +18,7 @@ def main(profile=False):
         epsilon_initial=0.5, 
         batch_size=64, 
         threshold_r=200,
-        render_during_training=True #to enable rendering during training
+        render_during_training=False #to enable rendering during training
     )
 
     theta_init_sd = agent.network.network.state_dict()

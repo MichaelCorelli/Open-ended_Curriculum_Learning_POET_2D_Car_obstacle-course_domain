@@ -48,7 +48,7 @@ class POET:
         self.threshold_c_min = r_mean - range_val
         self.threshold_c_max = r_mean + range_val
 
-        print(f"Thresholds: min = {self.threshold_c_min}, max = {self.threshold_c_max}")
+        #print(f"Thresholds: min = {self.threshold_c_min}, max = {self.threshold_c_max}")
 
     def update_threshold_el(self, r_history, window_size=5, v=0.03):
         if len(r_history) < window_size:
@@ -63,14 +63,14 @@ class POET:
         else:
             self.threshold_el = min(1, self.threshold_el + v)
 
-        print(f"Eligibility threshold: {self.threshold_el}")
+        #print(f"Eligibility threshold: {self.threshold_el}")
         
     def _evaluate_agent_with_vector(self, E, theta_vector):
         if theta_vector is None:
             return E.evaluate_agent(self.ddqn_agent, None, verbose=False)
-        print(f"Vector shape: {theta_vector.shape}")
+        #print(f"Vector shape: {theta_vector.shape}")
         total_params = sum(p.numel() for p in self.reference_state_dict.values())
-        print(f"Expected total params: {total_params}")
+        #print(f"Expected total params: {total_params}")
         theta_sd = vector_to_state_dict(theta_vector, self.reference_state_dict)
         return E.evaluate_agent(self.ddqn_agent, theta_sd, verbose=False)
 
@@ -103,11 +103,12 @@ class POET:
             if self.threshold_c_min <= mean_reward <= self.threshold_c_max:
                 res.append((E_child, theta_child))
 
-        print(f"Result in mc_satisfied: {res}")
+        #print(f"Result in mc_satisfied: {res}")
         return res
 
     def rank_by_novelty(self, child_list, k = 3):
         e = self.envs + self.archive_envs
+        #print(f"Env: {e}")
         child_novelty = []
 
         for E_child, theta_child in child_list:
@@ -122,11 +123,11 @@ class POET:
             nearest_neighbors = dist[:k]
 
             novelty_score = np.mean(nearest_neighbors) if nearest_neighbors else 0.0
-            print(f"Theta_child novelty score: {novelty_score}")
+            #print(f"Theta_child novelty score: {novelty_score}")
             child_novelty.append((E_child, theta_child, novelty_score))
 
         child_novelty_sorted = sorted(child_novelty, key=lambda x: x[2], reverse=True)
-        print(f"child_novelty sorted: {child_novelty_sorted}")
+        #print(f"child_novelty sorted: {child_novelty_sorted}")
         child_list_sorted = [(E_child, theta_child) for E_child, theta_child, _ in child_novelty_sorted]
         return child_list_sorted
     
@@ -140,7 +141,7 @@ class POET:
 
     def env_reproduce(self, parent_list, max_children):
         child_list = []
-        print(f"parent_list: {parent_list}")
+        #print(f"parent_list: {parent_list}")
 
         for E_parent, theta_parent in parent_list:
             for _ in range(max_children // len(parent_list)):
@@ -150,7 +151,7 @@ class POET:
                 
                 theta_parent_sd = vector_to_state_dict(theta_parent, self.reference_state_dict)
                 score = E_child.evaluate_agent(self.ddqn_agent, theta_parent_sd)
-                print(f"Theta_parent score: {score} in new environment")
+                #print(f"Theta_parent score: {score} in new environment")
 
                 theta_child = np.copy(theta_parent).flatten()
                 child_tuple = (E_child, theta_child)
@@ -161,7 +162,7 @@ class POET:
 
                 child_list.append(child_tuple)
 
-        print(f"child_list: {child_list}")
+        #print(f"child_list: {child_list}")
         return child_list
 
     def mutate_envs(self, EA_list):
@@ -336,7 +337,7 @@ class POET:
 
                         E.modify_env(modified_env_params)
                         E.obstacles_config.append(modified_env_params)
-                        print(f"New hole: {E.obstacles_config}")
+                        #print(f"New hole: {E.obstacles_config}")
                         break
                     else:
                         width = width_init * difficulty_factor
@@ -354,13 +355,13 @@ class POET:
 
                         E.modify_env(modified_env_params)
                         E.obstacles_config.append(modified_env_params)
-                        print(f"New ramp or bump: {E.obstacles_config}")
+                        #print(f"New ramp or bump: {E.obstacles_config}")
                         break
                 else:
                     continue
 
         reward = E.evaluate_agent(self.ddqn_agent, None)
-        print(f"Reward: {reward}")
+        #print(f"Reward: {reward}")
 
         key = (E, tuple(theta))
         if key not in self.r_history:
@@ -376,7 +377,6 @@ class POET:
             existing_position = obstacle['base_position']
             
             distance = p[0] - existing_position[0]
-            print(distance)
 
             max_width = 20
 
@@ -424,7 +424,7 @@ class POET:
                             theta_top = self.evaluate_candidates(theta_b_a_m, E_m, self.alpha, self.noise_std)
                             top_score = self._evaluate_agent_with_vector(E_m, theta_top)
                             current_score = self._evaluate_agent_with_vector(E_m, theta_m_t_1)
-                            print(f"theta_top score: {top_score}, current score: {current_score}")
+                            #print(f"theta_top score: {top_score}, current score: {current_score}")
                             if top_score['mean_reward'] > current_score['mean_reward']:
                                 theta_m_t_1 = theta_top
 

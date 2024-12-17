@@ -66,7 +66,7 @@ class CarEnvironment(gym.Env):
             self.background_texture = pygame.image.load("textures/background.png").convert()
             self.background_texture = pygame.transform.scale(self.background_texture, (SCREEN_W, SCREEN_H))
         except pygame.error as e:
-            print(f"Errore nel caricamento di background.png: {e}")
+            print(f"Error background.png: {e}")
             self.background_texture = pygame.Surface((SCREEN_W, SCREEN_H))
             self.background_texture.fill(WHITE)
 
@@ -75,7 +75,7 @@ class CarEnvironment(gym.Env):
             wheel_radius = 0.6 
             self.wheel_texture = pygame.transform.scale(self.wheel_texture, (int(wheel_radius * 2 * PPM), int(wheel_radius * 2 * PPM)))
         except pygame.error as e:
-            print(f"Errore nel caricamento di wheel.png: {e}")
+            print(f"Error wheel.png: {e}")
             wheel_radius = 0.6
             self.wheel_texture = pygame.Surface((int(wheel_radius * 2 * PPM), int(wheel_radius * 2 * PPM)), pygame.SRCALPHA)
             pygame.draw.circle(self.wheel_texture, (100, 100, 100), (int(wheel_radius * PPM), int(wheel_radius * PPM)), int(wheel_radius * PPM))
