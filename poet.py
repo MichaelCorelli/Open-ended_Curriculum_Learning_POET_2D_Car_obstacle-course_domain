@@ -380,7 +380,7 @@ class POET:
 
             max_width = 20
 
-            min_distance_required = max_width + 5
+            min_distance_required = max_width + 20
             if distance < min_distance_required:
                 return False
 
